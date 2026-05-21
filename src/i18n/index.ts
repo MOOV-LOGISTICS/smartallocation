@@ -79,6 +79,7 @@ export const I18N = {
       batchNoVoyage: 'No available voyage within the CRD-to-ETD window (detected during batch run).',
       crdLaterThanFob: 'CRD week is later than FOB week — the cargo ready date falls after the planned FOB departure. Needs human to resolve.',
     },
+    pagination: { perPage: '{n} / page', showing: 'Showing {from}–{to} of {total}' },
     toast: { batchStart: 'Starting batch pre-assign for {n} POs…', batchDone: '✓ Batch pre-assign completed ({n} POs processed)', singleDone: '✓ {po} pre-assigned successfully', noEligible: 'No eligible POs to run', resolveSuccess: '✓ {po} resolved and moved to Pre-Assign list' },
     user: { name: 'z.dorothy', email: 'z.dorothy@moovlogistics.com' },
     misc: { langLabel: 'EN' }
@@ -161,6 +162,7 @@ export const I18N = {
       batchNoVoyage: '批量执行发现 CRD 到 ETD 窗口内无可用航次。',
       crdLaterThanFob: 'CRD 周晚于 FOB 周——货物备货日期在计划 FOB 出发日期之后，需人工处理。',
     },
+    pagination: { perPage: '{n} 条/页', showing: '显示第 {from}–{to} 条，共 {total} 条' },
     toast: { batchStart: '开始批量执行 {n} 条 PO 的预排船…', batchDone: '✓ 批量预排船完成（共处理 {n} 条）', singleDone: '✓ {po} 预排船完成', noEligible: '没有可执行的 PO', resolveSuccess: '✓ {po} 已解决并移回预排船列表' },
     user: { name: 'z.dorothy', email: 'z.dorothy@moovlogistics.com' },
     misc: { langLabel: '中' }
