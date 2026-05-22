@@ -160,11 +160,12 @@ function App() {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       list = list.filter(p =>
-        p.poNo.toLowerCase().includes(q) ||
+        (p.poNo || '').toLowerCase().includes(q) ||
+        (p.moovRef || '').toLowerCase().includes(q) ||
         p.lot.toLowerCase().includes(q) ||
         p.article.toLowerCase().includes(q) ||
-        p.pol.toLowerCase().includes(q) ||
-        p.pod.toLowerCase().includes(q)
+        (p.pol || '').toLowerCase().includes(q) ||
+        (p.pod || '').toLowerCase().includes(q)
       );
     }
     return list;
@@ -354,11 +355,12 @@ function App() {
     if (bookingSearchQuery) {
       const q = bookingSearchQuery.toLowerCase();
       list = list.filter(p =>
-        p.poNo.toLowerCase().includes(q) ||
+        (p.poNo || '').toLowerCase().includes(q) ||
+        (p.moovRef || '').toLowerCase().includes(q) ||
         p.lot.toLowerCase().includes(q) ||
         p.article.toLowerCase().includes(q) ||
-        p.pol.toLowerCase().includes(q) ||
-        p.pod.toLowerCase().includes(q)
+        (p.pol || '').toLowerCase().includes(q) ||
+        (p.pod || '').toLowerCase().includes(q)
       );
     }
     return list;

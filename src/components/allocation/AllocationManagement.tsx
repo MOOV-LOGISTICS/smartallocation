@@ -74,7 +74,7 @@ export function AllocationManagement({
   const [filterCarrier, setFilterCarrier] = useState('ALL');
   const [filterMonth, setFilterMonth] = useState('ALL');
   const [filterWeek, setFilterWeek] = useState('ALL');
-  const [bar2BaseState, setBar2BaseState] = useState<'initial' | 'available'>('available');
+  const bar2BaseState = 'available' as const;
 
   const currentMatrix = bookingMatrixVersions.length > 0 ? bookingMatrixVersions[bookingMatrixVersions.length - 1].data : [];
   const currentFnd = fndRulesVersions.length > 0 ? fndRulesVersions[fndRulesVersions.length - 1].data : [];
@@ -609,7 +609,7 @@ export function AllocationManagement({
                     {preassignPct > 15 && <span style={{ fontSize: 9, color: d.isOvercommit ? '#7C2D12' : '#fff', fontWeight: 600 }}>{d.preassign}</span>}
                   </div>
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 4 }}>
-                    {!d.isOvercommit && preassignPct < 88 && <span style={{ fontSize: 9, color: '#92400E' }}>{d.preassignAvail} avail</span>}
+                    {!d.isOvercommit && preassignPct < 88 && <span style={{ fontSize: 9, color: '#92400E' }}>{d.preassignAvail} pre-assign avail</span>}
                   </div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text3)', marginTop: 1 }}>
@@ -670,24 +670,13 @@ export function AllocationManagement({
                   {weekOptions.map(w => <option key={w} value={w}>W{w.split('/')[0]}</option>)}
                 </select>
               </label>
-              {viewLevel === 3 && (
-                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: 'var(--text2)' }}>
-                  <span>Bar 2 compare to:</span>
-                  {(['available', 'initial'] as const).map(opt => (
-                    <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                      <input type="radio" name="bar2base" value={opt} checked={bar2BaseState === opt} onChange={() => setBar2BaseState(opt)} style={{ cursor: 'pointer' }} />
-                      {opt === 'available' ? 'Available (recommended)' : 'Initial quota'}
-                    </label>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Subtitle */}
             <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 10, fontStyle: 'italic' }}>
               {viewLevel === 1 && 'Year overview — cells show Carrier Booking available TEU aggregated per month. Color reflects hard availability (Initial − Carrier Booking). ⚠ OC = Pre-assign exceeds available space (normal and expected in pre-assign stage).'}
               {viewLevel === 2 && `${filterMonth} breakdown — each column is one allocation week. Figures show available TEU (Initial − Carrier Booking). Color reflects Carrier Booking utilization only; Pre-assign does not affect color.`}
-              {viewLevel === 3 && `Week W${filterWeek.split('/')[0]} detail — Bar 1: Carrier Booking against initial quota. Bar 2: Pre-assign soft-booking against ${bar2BaseState === 'available' ? 'available space (Initial − Carrier Booking)' : 'initial quota'}.`}
+              {viewLevel === 3 && `Week W${filterWeek.split('/')[0]} detail — Bar 1: Carrier Booking against initial quota. Bar 2: Pre-assign soft-booking against available space (Initial − Carrier Booking).`}
             </p>
 
             {/* Table */}
