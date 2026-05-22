@@ -160,11 +160,12 @@ function App() {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       list = list.filter(p =>
-        p.poNo.toLowerCase().includes(q) ||
+        (p.poNo || '').toLowerCase().includes(q) ||
+        (p.moovRef || '').toLowerCase().includes(q) ||
         p.lot.toLowerCase().includes(q) ||
         p.article.toLowerCase().includes(q) ||
-        p.pol.toLowerCase().includes(q) ||
-        p.pod.toLowerCase().includes(q)
+        (p.pol || '').toLowerCase().includes(q) ||
+        (p.pod || '').toLowerCase().includes(q)
       );
     }
     return list;
@@ -271,7 +272,7 @@ function App() {
             priority: 1
           };
         } else if (rand < 0.85) {
-          extras = { status: 'EXCEPTION', exceptionAtStep: 6, exceptionKey: 'batchNoVoyage' };
+          extras = { status: 'EXCEPTION', exceptionAtStep: 4, exceptionKey: 'batchNoVoyage' };
         } else {
           extras = { status: 'ON_HOLD', onHoldKey: 'batchCheck' };
         }
@@ -354,11 +355,12 @@ function App() {
     if (bookingSearchQuery) {
       const q = bookingSearchQuery.toLowerCase();
       list = list.filter(p =>
-        p.poNo.toLowerCase().includes(q) ||
+        (p.poNo || '').toLowerCase().includes(q) ||
+        (p.moovRef || '').toLowerCase().includes(q) ||
         p.lot.toLowerCase().includes(q) ||
         p.article.toLowerCase().includes(q) ||
-        p.pol.toLowerCase().includes(q) ||
-        p.pod.toLowerCase().includes(q)
+        (p.pol || '').toLowerCase().includes(q) ||
+        (p.pod || '').toLowerCase().includes(q)
       );
     }
     return list;
@@ -451,7 +453,7 @@ function App() {
             priority: 1
           };
         } else if (rand < 0.85) {
-          extras = { status: 'EXCEPTION', exceptionAtStep: 6, exceptionKey: 'batchNoVoyage' };
+          extras = { status: 'EXCEPTION', exceptionAtStep: 4, exceptionKey: 'batchNoVoyage' };
         } else {
           extras = { status: 'ON_HOLD', onHoldKey: 'batchCheck' };
         }
@@ -613,6 +615,8 @@ function App() {
           setResolvePo(drawerPo);
           setResolveOpen(true);
         }}
+        allocationUsage={allocationUsage}
+        initialAllocation={INITIAL_ALLOCATION}
       />
       <ResolveModal
         po={resolvePo}

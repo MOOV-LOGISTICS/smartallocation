@@ -120,13 +120,7 @@ export function TopNav({ lang, counts, toggleLang, activeTab, setActiveTab, acti
         </button>
       </div>
       <div className="topnav-right">
-        <button className="topnav-icon-btn" title="Notifications">
-          <IconBell />
-          <span className="dot"></span>
-        </button>
-        <button className="topnav-icon-btn" title="Messages">
-          <IconChat />
-        </button>
+        {/* Notifications and Messages — hidden until implemented */}
         <button className="lang-switcher" onClick={toggleLang}>
           <IconGlobe /> {t(lang, 'misc.langLabel')}
         </button>
