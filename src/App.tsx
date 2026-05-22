@@ -272,7 +272,7 @@ function App() {
             priority: 1
           };
         } else if (rand < 0.85) {
-          extras = { status: 'EXCEPTION', exceptionAtStep: 6, exceptionKey: 'batchNoVoyage' };
+          extras = { status: 'EXCEPTION', exceptionAtStep: 4, exceptionKey: 'batchNoVoyage' };
         } else {
           extras = { status: 'ON_HOLD', onHoldKey: 'batchCheck' };
         }
@@ -453,7 +453,7 @@ function App() {
             priority: 1
           };
         } else if (rand < 0.85) {
-          extras = { status: 'EXCEPTION', exceptionAtStep: 6, exceptionKey: 'batchNoVoyage' };
+          extras = { status: 'EXCEPTION', exceptionAtStep: 4, exceptionKey: 'batchNoVoyage' };
         } else {
           extras = { status: 'ON_HOLD', onHoldKey: 'batchCheck' };
         }
@@ -615,6 +615,8 @@ function App() {
           setResolvePo(drawerPo);
           setResolveOpen(true);
         }}
+        allocationUsage={allocationUsage}
+        initialAllocation={INITIAL_ALLOCATION}
       />
       <ResolveModal
         po={resolvePo}
