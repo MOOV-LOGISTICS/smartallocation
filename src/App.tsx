@@ -205,6 +205,7 @@ function App() {
   const [interceptModal, setInterceptModal] = useState<{
     type: 'crdLaterThanFob' | 'tooEarly';
     po: PO;
+    computedResult: PO;
   } | null>(null);
 
   // Carrier Booking State
@@ -281,17 +282,18 @@ function App() {
   };
 
   const runPreAssignLive = (po: PO) => {
-    // Compute real result FIRST so each step shows its true state during animation
     const updated = computeAssignment(po);
 
-    // Stop animation at the step that decided the outcome — no need to run further
     const failStep = updated.status === 'ON_HOLD' ? 1
       : updated.status === 'EXCEPTION' ? (updated.exceptionAtStep ?? 4)
-      : 5; // ASSIGNED → all 5 steps animate
+      : 5;
 
-    // Set drawerPo to the real result before animation starts
-    // TraceStep reads entry.result from this PO, so each completed step immediately
-    // shows its true PASS / FAIL / ON_HOLD state as the animation progresses
+    // Determine if Step 1 failure is user-fixable (intercept mid-animation)
+    const interceptType: 'crdLaterThanFob' | 'tooEarly' | null =
+      updated.exceptionKey === 'crdLaterThanFob' ? 'crdLaterThanFob'
+      : (updated.status === 'ON_HOLD' && updated.onHoldKey === 'requestTooEarly') ? 'tooEarly'
+      : null;
+
     setDrawerPo(updated);
     setDrawerOpen(true);
     setIsLiveRun(true);
@@ -300,14 +302,19 @@ function App() {
     let cur = 1;
     const interval = setInterval(() => {
       cur++;
+      // Step 1 animation just finished — pause and ask user if interceptable
+      if (cur === 2 && interceptType) {
+        clearInterval(interval);
+        setRunningStep(null);
+        setIsLiveRun(false);
+        setInterceptModal({ type: interceptType, po, computedResult: updated });
+        return;
+      }
       if (cur > failStep) {
         clearInterval(interval);
         setRunningStep(null);
         setIsLiveRun(false);
-        // Persist result to table — filter stays unchanged so user can
-        // keep running remaining LOTs in the same tab (e.g. NOT_STARTED)
         setPos(prev => prev.map(p => p.id === po.id ? updated : p));
-        // Show result-specific toast
         const label = po.moovRef || po.lot;
         if (updated.status === 'ASSIGNED') {
           showToast(t(lang, 'toast.singleDone', { po: label }), 'success');
@@ -322,20 +329,7 @@ function App() {
     }, 800);
   };
 
-  const handleRunPreAssign = (po: PO) => {
-    const fobW = parseInt(po.fobWeek.split('/')[0]);
-    const crdW = parseInt(po.crdWeek.split('/')[0]);
-    const bufferWeeks = fobW - crdW;
-    if (bufferWeeks < 0) {
-      setInterceptModal({ type: 'crdLaterThanFob', po });
-      return;
-    }
-    if (bufferWeeks > 4 && !EARLY_SHIPMENT_LOTS.has(po.lot.trim())) {
-      setInterceptModal({ type: 'tooEarly', po });
-      return;
-    }
-    runPreAssignLive(po);
-  };
+  const handleRunPreAssign = (po: PO) => runPreAssignLive(po);
 
   const handleBatchRun = () => {
     const targets = selectedIds.size > 0
@@ -754,11 +748,20 @@ function App() {
             runPreAssignLive(modifiedPo);
           }}
           onProceedAsIs={() => {
-            const po = interceptModal.po;
+            const result = interceptModal.computedResult;
             setInterceptModal(null);
-            runPreAssignLive(po);
+            setPos(prev => prev.map(p => p.id === result.id ? result : p));
+            const label = result.moovRef || result.lot;
+            if (result.status === 'ON_HOLD') {
+              showToast(t(lang, 'toast.singleOnHold', { po: label }), 'warning');
+            } else {
+              showToast(t(lang, 'toast.singleException', { po: label, n: result.exceptionAtStep ?? 1 }), 'error');
+            }
           }}
-          onCancel={() => setInterceptModal(null)}
+          onCancel={() => {
+            setInterceptModal(null);
+            closeDrawer();
+          }}
         />
       )}
 
