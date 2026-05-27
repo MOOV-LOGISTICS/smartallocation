@@ -85,7 +85,7 @@ export const I18N = {
     },
     pagination: { perPage: '{n} / page', showing: 'Showing {from}–{to} of {total}' },
     stepTitles: { cb1: 'Verify SRD & Authorization' },
-    toast: { batchStart: 'Starting batch pre-assign for {n} POs…', batchDone: '✓ Batch pre-assign completed ({n} POs processed)', singleDone: '✓ {po} pre-assigned successfully', noEligible: 'No eligible POs to run', resolveSuccess: '✓ {po} resolved and moved to Pre-Assign list' },
+    toast: { batchStart: 'Starting batch pre-assign for {n} POs…', batchDone: '✓ Batch pre-assign completed ({n} POs processed)', singleDone: '✓ {po} pre-assigned successfully', singleOnHold: '⏸ {po} — placed on hold (CRD too early)', singleException: '⚠ {po} — exception at step {n}', noEligible: 'No eligible POs to run', resolveSuccess: '✓ {po} resolved and moved to Pre-Assign list' },
     user: { name: 'z.dorothy', email: 'z.dorothy@moovlogistics.com' },
     misc: { langLabel: 'EN' }
   },
@@ -173,7 +173,7 @@ export const I18N = {
     },
     pagination: { perPage: '{n} 条/页', showing: '显示第 {from}–{to} 条，共 {total} 条' },
     stepTitles: { cb1: '验证 SRD 及授权' },
-    toast: { batchStart: '开始批量执行 {n} 条 PO 的预排船…', batchDone: '✓ 批量预排船完成（共处理 {n} 条）', singleDone: '✓ {po} 预排船完成', noEligible: '没有可执行的 PO', resolveSuccess: '✓ {po} 已解决并移回预排船列表' },
+    toast: { batchStart: '开始批量执行 {n} 条 PO 的预排船…', batchDone: '✓ 批量预排船完成（共处理 {n} 条）', singleDone: '✓ {po} 预排船完成', singleOnHold: '⏸ {po} — 已暂缓（CRD 时间过早）', singleException: '⚠ {po} — 第 {n} 步发生异常', noEligible: '没有可执行的 PO', resolveSuccess: '✓ {po} 已解决并移回预排船列表' },
     user: { name: 'z.dorothy', email: 'z.dorothy@moovlogistics.com' },
     misc: { langLabel: '中' }
   }
