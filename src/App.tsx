@@ -14,6 +14,7 @@ import { ToastContainer } from './components/common/ToastContainer';
 import { AllocationManagement } from './components/allocation/AllocationManagement';
 import { ExceptionDashboard } from './components/exception/ExceptionDashboard';
 import { ResolveModal } from './components/exception/ResolveModal';
+import { PreAssignInterceptModal } from './components/preassign/PreAssignInterceptModal';
 import { MOCK_POS, BOOKING_MOCK_POS, DEMO_ALLOCATION_USAGE } from './data/mockData';
 import { INITIAL_ALLOCATION, EARLY_SHIPMENT_LOTS, BOOKING_MATRIX, VESSEL_SCHEDULES, FND_RULES } from './data/referenceData';
 import { I18N, t } from './i18n';
@@ -201,6 +202,10 @@ function App() {
   const [resolvePo, setResolvePo] = useState<PO | null>(null);
   const [resolveOpen, setResolveOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [interceptModal, setInterceptModal] = useState<{
+    type: 'crdLaterThanFob' | 'tooEarly';
+    po: PO;
+  } | null>(null);
 
   // Carrier Booking State
   const [bookingPos, setBookingPos] = useState<PO[]>(BOOKING_MOCK_POS);
@@ -315,6 +320,21 @@ function App() {
         setRunningStep(cur);
       }
     }, 800);
+  };
+
+  const handleRunPreAssign = (po: PO) => {
+    const fobW = parseInt(po.fobWeek.split('/')[0]);
+    const crdW = parseInt(po.crdWeek.split('/')[0]);
+    const bufferWeeks = fobW - crdW;
+    if (bufferWeeks < 0) {
+      setInterceptModal({ type: 'crdLaterThanFob', po });
+      return;
+    }
+    if (bufferWeeks > 4 && !EARLY_SHIPMENT_LOTS.has(po.lot.trim())) {
+      setInterceptModal({ type: 'tooEarly', po });
+      return;
+    }
+    runPreAssignLive(po);
   };
 
   const handleBatchRun = () => {
@@ -582,7 +602,7 @@ function App() {
               toggleSelect={toggleSelect}
               toggleSelectAll={toggleSelectAll}
               openDrawer={openDrawer}
-              runPreAssignLive={runPreAssignLive}
+              runPreAssignLive={handleRunPreAssign}
             />
           </div>
         </>
@@ -721,6 +741,26 @@ function App() {
         }}
         lang={lang}
       />
+
+      {interceptModal && (
+        <PreAssignInterceptModal
+          type={interceptModal.type}
+          po={interceptModal.po}
+          lang={lang}
+          onModifyAndRun={(newCrd) => {
+            const newCrdWeek = etdToAllocWeek(newCrd);
+            const modifiedPo = { ...interceptModal.po, crd: newCrd, crdWeek: newCrdWeek };
+            setInterceptModal(null);
+            runPreAssignLive(modifiedPo);
+          }}
+          onProceedAsIs={() => {
+            const po = interceptModal.po;
+            setInterceptModal(null);
+            runPreAssignLive(po);
+          }}
+          onCancel={() => setInterceptModal(null)}
+        />
+      )}
 
       <ToastContainer toasts={toasts} />
     </>
