@@ -16,15 +16,17 @@ interface DrawerProps {
   onRerun: () => void;
   lang: Lang;
   onGoToException?: () => void;
+  allocationUsage?: Record<string, { preassign: number; booked: number }>;
+  initialAllocation?: Record<string, number>;
 }
 
-export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException }: DrawerProps) {
-  const trace = useMemo(() => po ? buildTraceLog(po, lang) : [], [po, lang]);
+export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException, allocationUsage, initialAllocation }: DrawerProps) {
+  const trace = useMemo(() => po ? buildTraceLog(po, lang, allocationUsage, initialAllocation) : [], [po, lang, allocationUsage, initialAllocation]);
   const isLive = isLiveRun && runningStep !== null;
   const progressPct = isLive
     ? Math.min(100, (runningStep - 1) / 5 * 100)
     : po
-      ? (po.status === 'ASSIGNED' ? 100 : po.status === 'ON_HOLD' ? (2 / 5 * 100) : ((Math.min(po.exceptionAtStep || 1, 4) - 1) / 5 * 100))
+      ? (po.status === 'ASSIGNED' ? 100 : po.status === 'ON_HOLD' ? (1 / 5 * 100) : ((Math.min(po.exceptionAtStep || 1, 4) - 1) / 5 * 100))
       : 0;
 
   if (!po) return null;

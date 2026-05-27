@@ -690,6 +690,8 @@ tbody tr:last-child td { border-bottom: none; }
   font-weight: 500;
 }
 .toast.success { background: var(--teal); }
+.toast.warning { background: #b45309; }
+.toast.error   { background: #dc2626; }
 
 /* Empty */
 .empty { text-align: center; padding: 60px 20px; color: var(--text3); }

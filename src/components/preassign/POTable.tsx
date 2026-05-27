@@ -51,18 +51,18 @@ export function POTable({
       <div className="table-wrap">
         <table>
           <colgroup>
-            <col style={{ width: 38 }} />   {/* checkbox */}
-            <col style={{ width: 142 }} />  {/* moovRef / LOT */}
-            <col style={{ width: 145 }} />  {/* article */}
-            <col style={{ width: 64 }} />   {/* POL */}
-            <col style={{ width: 64 }} />   {/* POD */}
-            <col style={{ width: 74 }} />   {/* TEU */}
-            <col style={{ width: 74 }} />   {/* CTR TYPE */}
-            <col style={{ width: 152 }} />  {/* CRD·FOB·LDD */}
-            <col style={{ width: 165 }} />  {/* CARRIER/VESSEL */}
-            <col style={{ width: 152 }} />  {/* ETD/ETA/PETA */}
-            <col style={{ width: 100 }} />  {/* STATUS */}
-            <col style={{ width: 56 }} />   {/* actions */}
+            <col style={{ width: 38 }} />
+            <col style={{ width: 142 }} />
+            <col style={{ width: 145 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 74 }} />
+            <col style={{ width: 74 }} />
+            <col style={{ width: 152 }} />
+            <col style={{ width: 165 }} />
+            <col style={{ width: 152 }} />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 56 }} />
           </colgroup>
           <thead>
             <tr>

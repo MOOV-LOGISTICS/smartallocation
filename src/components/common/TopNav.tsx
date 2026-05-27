@@ -6,21 +6,32 @@ import { IconShip, IconDatabase, IconAlert, IconInbox, IconBell, IconChat, IconG
 interface TopNavProps {
   lang: Lang;
   counts: { exception: number };
-  toggleLang: () => void;
+  setLang: (lang: Lang) => void;
   activeTab: 'preassign' | 'allocation' | 'booking';
   setActiveTab: (tab: 'preassign' | 'allocation' | 'booking') => void;
   activeSubTab: 'all' | 'exception';
   setActiveSubTab: (tab: 'all' | 'exception') => void;
 }
 
-export function TopNav({ lang, counts, toggleLang, activeTab, setActiveTab, activeSubTab, setActiveSubTab }: TopNavProps) {
+const LANG_OPTIONS: { value: Lang; label: string; short: string }[] = [
+  { value: 'en', label: 'English', short: 'EN' },
+  { value: 'zh', label: '中文',    short: 'ZH' },
+  { value: 'de', label: 'Deutsch', short: 'DE' },
+];
+
+export function TopNav({ lang, counts, setLang, activeTab, setActiveTab, activeSubTab, setActiveSubTab }: TopNavProps) {
   const [expandedTab, setExpandedTab] = useState<'preassign' | 'booking' | null>(null);
+  const [langOpen, setLangOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
+  const langRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (navRef.current && !navRef.current.contains(e.target as Node)) {
         setExpandedTab(null);
+      }
+      if (langRef.current && !langRef.current.contains(e.target as Node)) {
+        setLangOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -120,16 +131,40 @@ export function TopNav({ lang, counts, toggleLang, activeTab, setActiveTab, acti
         </button>
       </div>
       <div className="topnav-right">
-        <button className="topnav-icon-btn" title="Notifications">
-          <IconBell />
-          <span className="dot"></span>
-        </button>
-        <button className="topnav-icon-btn" title="Messages">
-          <IconChat />
-        </button>
-        <button className="lang-switcher" onClick={toggleLang}>
-          <IconGlobe /> {t(lang, 'misc.langLabel')}
-        </button>
+        {/* Notifications and Messages — hidden until implemented */}
+        <div ref={langRef} style={{ position: 'relative' }}>
+          <button
+            className="lang-switcher"
+            onClick={() => setLangOpen(o => !o)}
+          >
+            <IconGlobe />
+            {LANG_OPTIONS.find(o => o.value === lang)?.short ?? 'EN'}
+          </button>
+          {langOpen && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+              background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.12)', minWidth: 140, zIndex: 999, overflow: 'hidden'
+            }}>
+              {LANG_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => { setLang(opt.value); setLangOpen(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', padding: '9px 14px', border: 'none', cursor: 'pointer',
+                    background: lang === opt.value ? '#F0F4F8' : '#fff',
+                    color: '#1A2B3C', fontSize: 13, fontWeight: lang === opt.value ? 700 : 400,
+                    textAlign: 'left'
+                  }}
+                >
+                  <span style={{ width: 24, fontWeight: 700, color: '#004F7C' }}>{opt.short}</span>
+                  <span>{opt.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="topnav-divider"></div>
         <div className="topnav-user">
           <div className="topnav-user-text">
