@@ -5,7 +5,16 @@ import { t } from '../../i18n';
 import { buildTraceLog, TraceEntry } from '../../utils/traceBuilder';
 import { StatusPill } from '../common/StatusPill';
 import { TraceStep } from './TraceStep';
+import { AgentPrompt } from './AgentPrompt';
 import { IconClose, IconRefresh, IconSparkle, IconAlert } from '../icons/index';
+
+interface AgentIntercept {
+  type: 'crdLaterThanFob' | 'tooEarly';
+  po: PO;
+  onModifyAndRun: (newCrd: string) => void;
+  onProceedAsIs: () => void;
+  onCancel: () => void;
+}
 
 interface DrawerProps {
   po: PO | null;
@@ -18,9 +27,10 @@ interface DrawerProps {
   onGoToException?: () => void;
   allocationUsage?: Record<string, { preassign: number; booked: number }>;
   initialAllocation?: Record<string, number>;
+  agentIntercept?: AgentIntercept | null;
 }
 
-export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException, allocationUsage, initialAllocation }: DrawerProps) {
+export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException, allocationUsage, initialAllocation, agentIntercept }: DrawerProps) {
   const trace = useMemo(() => po ? buildTraceLog(po, lang, allocationUsage, initialAllocation) : [], [po, lang, allocationUsage, initialAllocation]);
   const isLive = isLiveRun && runningStep !== null;
   const progressPct = isLive
@@ -90,13 +100,24 @@ export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lan
             />
           </div>
 
-          {trace.map((entry) => (
+          {(agentIntercept ? trace.slice(0, 1) : trace).map((entry) => (
             <TraceStep key={entry.step} entry={entry} currentStep={isLive ? runningStep : null} lang={lang} />
           ))}
 
-          {!isLive && po.status === 'ASSIGNED' && <ResultCardAssigned po={po} lang={lang} />}
-          {!isLive && po.status === 'ON_HOLD' && <ResultCardOnHold po={po} lang={lang} />}
-          {!isLive && po.status === 'EXCEPTION' && <ResultCardException po={po} lang={lang} />}
+          {agentIntercept && (
+            <AgentPrompt
+              type={agentIntercept.type}
+              po={agentIntercept.po}
+              lang={lang}
+              onModifyAndRun={agentIntercept.onModifyAndRun}
+              onProceedAsIs={agentIntercept.onProceedAsIs}
+              onCancel={agentIntercept.onCancel}
+            />
+          )}
+
+          {!isLive && !agentIntercept && po.status === 'ASSIGNED' && <ResultCardAssigned po={po} lang={lang} />}
+          {!isLive && !agentIntercept && po.status === 'ON_HOLD' && <ResultCardOnHold po={po} lang={lang} />}
+          {!isLive && !agentIntercept && po.status === 'EXCEPTION' && <ResultCardException po={po} lang={lang} />}
         </div>
 
         <div className="px-6 py-3 border-t border-[#DEE5EC] bg-white flex-shrink-0 flex gap-2 justify-end">

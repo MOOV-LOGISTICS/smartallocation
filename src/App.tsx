@@ -14,7 +14,6 @@ import { ToastContainer } from './components/common/ToastContainer';
 import { AllocationManagement } from './components/allocation/AllocationManagement';
 import { ExceptionDashboard } from './components/exception/ExceptionDashboard';
 import { ResolveModal } from './components/exception/ResolveModal';
-import { PreAssignInterceptModal } from './components/preassign/PreAssignInterceptModal';
 import { MOCK_POS, BOOKING_MOCK_POS, DEMO_ALLOCATION_USAGE } from './data/mockData';
 import { INITIAL_ALLOCATION, EARLY_SHIPMENT_LOTS, BOOKING_MATRIX, VESSEL_SCHEDULES, FND_RULES } from './data/referenceData';
 import { I18N, t } from './i18n';
@@ -274,6 +273,7 @@ function App() {
 
   const closeDrawer = () => {
     setDrawerOpen(false);
+    setInterceptModal(null);
     setTimeout(() => {
       setDrawerPo(null);
       setIsLiveRun(false);
@@ -686,6 +686,31 @@ function App() {
         }}
         allocationUsage={allocationUsage}
         initialAllocation={INITIAL_ALLOCATION}
+        agentIntercept={interceptModal ? {
+          type: interceptModal.type,
+          po: interceptModal.po,
+          onModifyAndRun: (newCrd) => {
+            const newCrdWeek = etdToAllocWeek(newCrd);
+            const modifiedPo = { ...interceptModal.po, crd: newCrd, crdWeek: newCrdWeek };
+            setInterceptModal(null);
+            runPreAssignLive(modifiedPo);
+          },
+          onProceedAsIs: () => {
+            const result = interceptModal.computedResult;
+            setInterceptModal(null);
+            setPos(prev => prev.map(p => p.id === result.id ? result : p));
+            const label = result.moovRef || result.lot;
+            if (result.status === 'ON_HOLD') {
+              showToast(t(lang, 'toast.singleOnHold', { po: label }), 'warning');
+            } else {
+              showToast(t(lang, 'toast.singleException', { po: label, n: result.exceptionAtStep ?? 1 }), 'error');
+            }
+          },
+          onCancel: () => {
+            setInterceptModal(null);
+            closeDrawer();
+          },
+        } : null}
       />
       <ResolveModal
         po={resolvePo}
@@ -735,35 +760,6 @@ function App() {
         }}
         lang={lang}
       />
-
-      {interceptModal && (
-        <PreAssignInterceptModal
-          type={interceptModal.type}
-          po={interceptModal.po}
-          lang={lang}
-          onModifyAndRun={(newCrd) => {
-            const newCrdWeek = etdToAllocWeek(newCrd);
-            const modifiedPo = { ...interceptModal.po, crd: newCrd, crdWeek: newCrdWeek };
-            setInterceptModal(null);
-            runPreAssignLive(modifiedPo);
-          }}
-          onProceedAsIs={() => {
-            const result = interceptModal.computedResult;
-            setInterceptModal(null);
-            setPos(prev => prev.map(p => p.id === result.id ? result : p));
-            const label = result.moovRef || result.lot;
-            if (result.status === 'ON_HOLD') {
-              showToast(t(lang, 'toast.singleOnHold', { po: label }), 'warning');
-            } else {
-              showToast(t(lang, 'toast.singleException', { po: label, n: result.exceptionAtStep ?? 1 }), 'error');
-            }
-          }}
-          onCancel={() => {
-            setInterceptModal(null);
-            closeDrawer();
-          }}
-        />
-      )}
 
       <ToastContainer toasts={toasts} />
     </>
