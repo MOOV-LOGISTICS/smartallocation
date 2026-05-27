@@ -276,21 +276,43 @@ function App() {
   };
 
   const runPreAssignLive = (po: PO) => {
-    setDrawerPo(po);
+    // Compute real result FIRST so each step shows its true state during animation
+    const updated = computeAssignment(po);
+
+    // Stop animation at the step that decided the outcome — no need to run further
+    const failStep = updated.status === 'ON_HOLD' ? 1
+      : updated.status === 'EXCEPTION' ? (updated.exceptionAtStep ?? 4)
+      : 5; // ASSIGNED → all 5 steps animate
+
+    // Set drawerPo to the real result before animation starts
+    // TraceStep reads entry.result from this PO, so each completed step immediately
+    // shows its true PASS / FAIL / ON_HOLD state as the animation progresses
+    setDrawerPo(updated);
     setDrawerOpen(true);
     setIsLiveRun(true);
     setRunningStep(1);
+
     let cur = 1;
     const interval = setInterval(() => {
       cur++;
-      if (cur > 5) {
+      if (cur > failStep) {
         clearInterval(interval);
         setRunningStep(null);
         setIsLiveRun(false);
-        const updated = computeAssignment(po);
+        // Persist result to table
         setPos(prev => prev.map(p => p.id === po.id ? updated : p));
-        setDrawerPo(updated);
-        showToast(t(lang, 'toast.singleDone', { po: po.moovRef || po.lot}), 'success');
+        // Reset filter to ALL so the updated PO is visible regardless of
+        // which filter tab was active (e.g. NOT_STARTED would hide an ON_HOLD result)
+        setFilter('ALL');
+        // Show result-specific toast
+        const label = po.moovRef || po.lot;
+        if (updated.status === 'ASSIGNED') {
+          showToast(t(lang, 'toast.singleDone', { po: label }), 'success');
+        } else if (updated.status === 'ON_HOLD') {
+          showToast(t(lang, 'toast.singleOnHold', { po: label }), 'warning');
+        } else {
+          showToast(t(lang, 'toast.singleException', { po: label, n: updated.exceptionAtStep ?? 1 }), 'error');
+        }
       } else {
         setRunningStep(cur);
       }
