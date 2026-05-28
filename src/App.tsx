@@ -238,7 +238,8 @@ function App() {
   const counts = useMemo(() => ({
     total: pos.length,
     not_started: pos.filter(p => p.status === 'NOT_STARTED').length,
-    assigned: pos.filter(p => p.status === 'ASSIGNED' || p.status === 'MANUALLY_OVERRIDDEN').length,
+    assigned: pos.filter(p => p.status === 'ASSIGNED').length,
+    overridden: pos.filter(p => p.status === 'MANUALLY_OVERRIDDEN').length,
     on_hold: pos.filter(p => p.status === 'ON_HOLD').length,
     exception: pos.filter(p => p.status === 'EXCEPTION').length
   }), [pos]);
@@ -355,6 +356,29 @@ function App() {
     showToast(`${overridden.moovRef || overridden.lot} manually overridden by z.dorothy`, 'warning');
   };
 
+  const handleBookingOverride = (data: { carrier: string; service: string; vessel: string; voyage: string; etd: string; eta: string }) => {
+    if (!bookingDrawerPo) return;
+    const overridden: PO = {
+      ...bookingDrawerPo,
+      status: 'MANUALLY_OVERRIDDEN',
+      carrier: data.carrier,
+      service: data.service,
+      vessel: data.vessel,
+      voyage: data.voyage,
+      etd: data.etd,
+      eta: data.eta,
+      overriddenBy: 'z.dorothy',
+      overriddenAt: new Date().toISOString(),
+      exceptionAtStep: undefined,
+      exceptionKey: undefined,
+      onHoldKey: undefined,
+    };
+    setBookingPos(prev => prev.map(p => p.id === overridden.id ? overridden : p));
+    setBookingDrawerPo(overridden);
+    showToast(`${overridden.moovRef || overridden.lot} booking manually overridden by z.dorothy`, 'warning');
+  };
+
+
   const handleBatchRun = () => {
     const targets = selectedIds.size > 0
       ? pos.filter(p => selectedIds.has(p.id) && p.status === 'NOT_STARTED')
@@ -402,7 +426,7 @@ function App() {
   };
 
   // Carrier Booking Logic
-  const BOOKED_STATUSES: POStatus[] = ['BOOKED_EXACT', 'BOOKED_UPDATED', 'ASSIGNED'];
+  const BOOKED_STATUSES: POStatus[] = ['BOOKED_EXACT', 'BOOKED_UPDATED', 'ASSIGNED', 'MANUALLY_OVERRIDDEN'];
 
   const bookingCounts = useMemo(() => {
     const exactMatch = bookingPos.filter(p => p.status === 'BOOKED_EXACT').length;
@@ -413,6 +437,7 @@ function App() {
       total: bookingPos.length,
       not_started: bookingPos.filter(p => p.status === 'NOT_STARTED').length,
       booked: bookingPos.filter(p => BOOKED_STATUSES.includes(p.status as POStatus)).length,
+      overridden: bookingPos.filter(p => p.status === 'MANUALLY_OVERRIDDEN').length,
       exception: bookingPos.filter(p => p.status === 'EXCEPTION').length,
       exactMatch,
       withSnapshot: bookedTotal,
@@ -435,8 +460,8 @@ function App() {
       if (!usage[key]) usage[key] = { preassign: 0, booked: 0 };
       usage[key][type] += p.teu;
     };
-    pos.filter(p => p.status === 'ASSIGNED').forEach(p => accumulate(p, 'preassign'));
-    bookingPos.filter(p => p.status === 'BOOKED_EXACT' || p.status === 'BOOKED_UPDATED').forEach(p => accumulate(p, 'booked'));
+    pos.filter(p => p.status === 'ASSIGNED' || p.status === 'MANUALLY_OVERRIDDEN').forEach(p => accumulate(p, 'preassign'));
+    bookingPos.filter(p => p.status === 'BOOKED_EXACT' || p.status === 'BOOKED_UPDATED' || p.status === 'MANUALLY_OVERRIDDEN').forEach(p => accumulate(p, 'booked'));
     return usage;
   }, [pos, bookingPos]);
 
@@ -768,6 +793,7 @@ function App() {
           setBookingResolvePo(bookingDrawerPo);
           setBookingResolveOpen(true);
         }}
+        onOverride={handleBookingOverride}
       />
       <BookingResolveModal
         po={bookingResolvePo}
