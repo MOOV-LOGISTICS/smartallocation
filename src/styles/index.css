@@ -228,7 +228,7 @@ body { min-height: 100vh; overflow-x: hidden; }
 .page { padding: 24px 32px 80px; }
 
 /* Stats Grid */
-.stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 28px; }
+.stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 28px; }
 
 .stat-card {
   background: var(--surface);
@@ -249,6 +249,7 @@ body { min-height: 100vh; overflow-x: hidden; }
 .stat-card[data-tone="total"]::before { background: var(--accent); }
 .stat-card[data-tone="not_started"]::before { background: var(--amber); }
 .stat-card[data-tone="assigned"]::before { background: var(--teal); }
+.stat-card[data-tone="overridden"]::before { background: #7C3AED; }
 .stat-card[data-tone="on_hold"]::before { background: var(--orange); }
 .stat-card[data-tone="exception"]::before { background: var(--danger); }
 
@@ -264,6 +265,7 @@ body { min-height: 100vh; overflow-x: hidden; }
 .stat-card[data-tone="total"] .stat-value { color: var(--accent); }
 .stat-card[data-tone="not_started"] .stat-value { color: var(--amber); }
 .stat-card[data-tone="assigned"] .stat-value { color: var(--teal); }
+.stat-card[data-tone="overridden"] .stat-value { color: #6D28D9; font-size: 26px; letter-spacing: -0.02em; }
 .stat-card[data-tone="on_hold"] .stat-value { color: var(--orange); }
 .stat-card[data-tone="exception"] .stat-value { color: var(--danger); }
 
@@ -440,6 +442,10 @@ tbody tr:last-child td { border-bottom: none; }
 .pill-error { background: rgba(239, 68, 68, 0.12); color: #B91C1C; }
 .pill-error .pill-dot { background: var(--danger); }
 .pill-neutral { background: var(--bg3); color: var(--text2); border-color: var(--border); }
+
+/* Manual Override status */
+.pill-overridden { background: rgba(139, 92, 246, 0.12); color: #6D28D9; border-color: rgba(139,92,246,0.3); }
+.pill-overridden .pill-dot { background: #7C3AED; }
 
 /* Carrier Booking statuses */
 .pill-booked-exact { background: rgba(16, 185, 129, 0.14); color: #047857; border-color: rgba(16,185,129,0.35); }
