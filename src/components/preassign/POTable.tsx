@@ -52,16 +52,12 @@ export function POTable({
         <table>
           <colgroup>
             <col style={{ width: 36 }} />   {/* checkbox */}
-            <col style={{ width: 124 }} />  {/* moovRef / LOT */}
-            <col style={{ width: 120 }} />  {/* article */}
-            <col style={{ width: 56 }} />   {/* POL */}
-            <col style={{ width: 56 }} />   {/* POD */}
-            <col style={{ width: 60 }} />   {/* TEU */}
-            <col style={{ width: 62 }} />   {/* CTR TYPE */}
-            <col style={{ width: 144 }} />  {/* CRD·FOB·LDD */}
-            <col style={{ width: 156 }} />  {/* CARRIER/VESSEL */}
-            <col style={{ width: 144 }} />  {/* ETD/ETA/PETA */}
-            <col style={{ width: 92 }} />   {/* STATUS */}
+            <col style={{ width: 138 }} />  {/* moovRef / LOT / supplier */}
+            <col style={{ width: 106 }} />  {/* LANE */}
+            <col style={{ width: 72 }} />   {/* TEU / CTR */}
+            <col style={{ width: 140 }} />  {/* CRD·FOB·LDD */}
+            <col style={{ width: 174 }} />  {/* CARRIER+VESSEL+DATES */}
+            <col style={{ width: 88 }} />   {/* STATUS */}
             <col style={{ width: 48 }} />   {/* actions */}
           </colgroup>
           <thead>
@@ -73,14 +69,10 @@ export function POTable({
                 />
               </th>
               <th>{t(lang, 'table.moovRef')}</th>
-              <th>{t(lang, 'table.article')}</th>
-              <th>{t(lang, 'table.pol')}</th>
-              <th>{t(lang, 'table.pod')}</th>
-              <th>{t(lang, 'table.teu')}</th>
-              <th>{t(lang, 'table.ctrType')}</th>
+              <th>{t(lang, 'table.lane')}</th>
+              <th><div>{t(lang, 'table.teu')}</div><div style={{ fontWeight: 400, color: 'var(--text3)', marginTop: 1 }}>{t(lang, 'table.ctrType')}</div></th>
               <th>{t(lang, 'table.crdFob')}</th>
-              <th>{t(lang, 'table.carrier')}</th>
-              <th>{t(lang, 'table.etdEta')}</th>
+              <th>{t(lang, 'table.vesselDates')}</th>
               <th>{t(lang, 'table.status')}</th>
               <th></th>
             </tr>
@@ -88,7 +80,7 @@ export function POTable({
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={12} className="empty">
+                <td colSpan={8} className="empty">
                   {t(lang, 'table.empty')}
                 </td>
               </tr>
@@ -106,33 +98,23 @@ export function POTable({
                       />
                     )}
                   </td>
-                  {/* MOOV's Ref + LOT merged */}
+                  {/* MOOV's Ref + LOT + Supplier */}
                   <td>
                     <div className="po-id" style={{ fontSize: 11 }}>{po.moovRef || '—'}</div>
                     <div className="po-sub font-mono font-semibold" style={{ color: 'var(--text1)', marginTop: 1 }}>{po.lot}</div>
                   </td>
-                  {/* Article */}
+                  {/* LANE — POL → POD combined */}
                   <td>
-                    <div className="article-name">{po.article}</div>
-                    <div className="po-sub">
-                      {t(lang, 'table.ianSupplier', { ian: po.ian, supplier: po.supplier })}
+                    <div className="lane" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <span>{po.pol}</span>
+                      <span style={{ color: 'var(--text3)', fontSize: 10 }}>→</span>
+                      <span>{po.pod}</span>
                     </div>
                   </td>
-                  {/* POL — separate column */}
+                  {/* TEU + CTR stacked — two lines, no operator */}
                   <td>
-                    <div className="lane"><span>{po.pol}</span></div>
-                  </td>
-                  {/* POD — separate column */}
-                  <td>
-                    <div className="lane"><span>{po.pod}</span></div>
-                  </td>
-                  {/* Planned TEU */}
-                  <td className="mono" style={{ textAlign: 'right' }}>
-                    <span className="ctr-badge">{po.teu}</span>
-                  </td>
-                  {/* Ctr Type */}
-                  <td>
-                    <span className="ctr-badge">{po.ctrType || po.ctr}</span>
+                    <div><span className="ctr-badge">{po.teu}</span><span className="po-sub" style={{ marginLeft: 3 }}>TEU</span></div>
+                    <div style={{ marginTop: 2 }}><span className="ctr-badge">{po.ctrType || po.ctr}</span></div>
                   </td>
                   {/* CRD · FOB · LDD */}
                   <td className="mono" style={{ fontSize: 11 }}>
@@ -140,7 +122,7 @@ export function POTable({
                     <div style={{ color: 'var(--text3)' }}>FOB {weekWithDate(po.fobWeek)}</div>
                     <div style={{ color: 'var(--text3)' }}>LDD {dateWithWeek(po.ldd)}</div>
                   </td>
-                  {/* Carrier / Vessel / Voyage */}
+                  {/* VESSEL + DATES — carrier/vessel/voyage + ETD/ETA/PETA combined */}
                   <td>
                     {po.carrier ? (
                       <>
@@ -148,18 +130,11 @@ export function POTable({
                           {po.carrier} <span>· {po.service}</span>
                         </div>
                         <div className="po-sub">{po.vessel} · {po.voyage}</div>
-                      </>
-                    ) : (
-                      <span className="no-carrier">{t(lang, 'table.noCarrier')}</span>
-                    )}
-                  </td>
-                  {/* ETD / ETA / PETA */}
-                  <td className="mono" style={{ fontSize: 11 }}>
-                    {po.etd ? (
-                      <>
-                        <div>ETD {dateWithWeek(po.etd)}</div>
-                        <div style={{ color: 'var(--text3)' }}>ETA {dateWithWeek(po.eta)}</div>
-                        {po.peta && <div style={{ color: 'var(--text3)' }}>PETA {dateWithWeek(po.peta)}</div>}
+                        {po.etd && (
+                          <div className="mono" style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>
+                            ETD {po.etd}{po.eta ? `  ETA ${po.eta}` : ''}
+                          </div>
+                        )}
                       </>
                     ) : (
                       <span className="no-carrier">{t(lang, 'table.noCarrier')}</span>

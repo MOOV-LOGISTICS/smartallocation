@@ -16,10 +16,10 @@ export const I18N = {
     selection: '{n} selected',
     table: {
       moovRef: "MOOV's Ref / LOT", poLot: 'PO / Lot', article: 'Article',
-      pol: 'POL', pod: 'POD',
+      pol: 'POL', pod: 'POD', lane: 'Lane', load: 'Load',
       container: 'Planned TEU', teu: 'Planned TEU', ctrType: 'Ctr Type',
       crdFob: 'CRD · FOB · LDD',
-      carrier: 'Carrier / Vessel / Voyage', etdEta: 'ETD / ETA / PETA',
+      carrier: 'Carrier / Vessel / Voyage', vesselDates: 'Carrier / Date', etdEta: 'ETD / ETA / PETA',
       status: 'Status', empty: 'No POs match the current filter.',
       ianSupplier: 'IAN {ian} · {supplier}', noCarrier: '—'
     },
@@ -104,10 +104,10 @@ export const I18N = {
     selection: '已选 {n} 条',
     table: {
       moovRef: "MOOV's Ref / LOT", poLot: 'PO / Lot', article: '商品',
-      pol: '起运港', pod: '目的港',
+      pol: '起运港', pod: '目的港', lane: '航线', load: '装载',
       container: '计划 TEU', teu: '计划 TEU', ctrType: '箱型',
       crdFob: 'CRD · FOB · LDD',
-      carrier: '船公司 / 船舶 / 航次', etdEta: 'ETD / ETA / PETA',
+      carrier: '船公司 / 船舶 / 航次', vesselDates: '船舶 / 日期', etdEta: 'ETD / ETA / PETA',
       status: '状态', empty: '无符合当前筛选条件的 PO。',
       ianSupplier: 'IAN {ian} · {supplier}', noCarrier: '—'
     },
