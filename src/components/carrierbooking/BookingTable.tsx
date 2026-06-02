@@ -51,20 +51,20 @@ export function BookingTable({
       <div className="table-wrap">
         <table>
           <colgroup>
-            <col style={{ width: 38 }} />   {/* checkbox */}
-            <col style={{ width: 130 }} />  {/* moovRef / LOT */}
-            <col style={{ width: 130 }} />  {/* article */}
-            <col style={{ width: 56 }} />   {/* POL */}
-            <col style={{ width: 56 }} />   {/* POD */}
-            <col style={{ width: 62 }} />   {/* TEU */}
-            <col style={{ width: 62 }} />   {/* CTR TYPE */}
-            <col style={{ width: 130 }} />  {/* CRD·FOB·LDD */}
-            <col style={{ width: 78 }} />   {/* SRD */}
-            <col style={{ width: 148 }} />  {/* CARRIER/VESSEL */}
-            <col style={{ width: 130 }} />  {/* ETD/ETA */}
-            <col style={{ width: 96 }} />   {/* BOOKING REF */}
-            <col style={{ width: 88 }} />   {/* STATUS */}
-            <col style={{ width: 50 }} />   {/* actions */}
+            <col style={{ width: 36 }} />   {/* checkbox */}
+            <col style={{ width: 118 }} />  {/* moovRef / LOT */}
+            <col style={{ width: 112 }} />  {/* article */}
+            <col style={{ width: 52 }} />   {/* POL */}
+            <col style={{ width: 52 }} />   {/* POD */}
+            <col style={{ width: 54 }} />   {/* TEU */}
+            <col style={{ width: 54 }} />   {/* CTR TYPE */}
+            <col style={{ width: 120 }} />  {/* CRD·FOB·LDD */}
+            <col style={{ width: 68 }} />   {/* SRD */}
+            <col style={{ width: 136 }} />  {/* CARRIER/VESSEL */}
+            <col style={{ width: 120 }} />  {/* ETD/ETA */}
+            <col style={{ width: 84 }} />   {/* BOOKING REF */}
+            <col style={{ width: 80 }} />   {/* STATUS */}
+            <col style={{ width: 44 }} />   {/* actions */}
           </colgroup>
           <thead>
             <tr>

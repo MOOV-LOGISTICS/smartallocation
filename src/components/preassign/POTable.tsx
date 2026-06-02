@@ -51,18 +51,18 @@ export function POTable({
       <div className="table-wrap">
         <table>
           <colgroup>
-            <col style={{ width: 38 }} />   {/* checkbox */}
-            <col style={{ width: 142 }} />  {/* moovRef / LOT */}
-            <col style={{ width: 145 }} />  {/* article */}
-            <col style={{ width: 64 }} />   {/* POL */}
-            <col style={{ width: 64 }} />   {/* POD */}
-            <col style={{ width: 74 }} />   {/* TEU */}
-            <col style={{ width: 74 }} />   {/* CTR TYPE */}
-            <col style={{ width: 152 }} />  {/* CRD·FOB·LDD */}
-            <col style={{ width: 165 }} />  {/* CARRIER/VESSEL */}
-            <col style={{ width: 152 }} />  {/* ETD/ETA/PETA */}
-            <col style={{ width: 100 }} />  {/* STATUS */}
-            <col style={{ width: 56 }} />   {/* actions */}
+            <col style={{ width: 36 }} />   {/* checkbox */}
+            <col style={{ width: 124 }} />  {/* moovRef / LOT */}
+            <col style={{ width: 120 }} />  {/* article */}
+            <col style={{ width: 56 }} />   {/* POL */}
+            <col style={{ width: 56 }} />   {/* POD */}
+            <col style={{ width: 60 }} />   {/* TEU */}
+            <col style={{ width: 62 }} />   {/* CTR TYPE */}
+            <col style={{ width: 144 }} />  {/* CRD·FOB·LDD */}
+            <col style={{ width: 156 }} />  {/* CARRIER/VESSEL */}
+            <col style={{ width: 144 }} />  {/* ETD/ETA/PETA */}
+            <col style={{ width: 92 }} />   {/* STATUS */}
+            <col style={{ width: 48 }} />   {/* actions */}
           </colgroup>
           <thead>
             <tr>
