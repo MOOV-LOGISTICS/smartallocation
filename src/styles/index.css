@@ -225,7 +225,7 @@ body { min-height: 100vh; overflow-x: hidden; }
 .page-title { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); }
 .page-subtitle { font-size: 13px; color: var(--text2); margin-top: 4px; }
 
-.page { padding: 24px 32px 80px; }
+.page { padding: 24px 20px 80px; }
 
 /* Stats Grid */
 .stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 28px; }
