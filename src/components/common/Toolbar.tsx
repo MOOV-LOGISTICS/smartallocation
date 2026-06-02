@@ -27,8 +27,8 @@ export function Toolbar({
   isBooking
 }: ToolbarProps) {
   const filters = isBooking
-    ? ['ALL', 'NOT_STARTED', 'BOOKED', 'EXCEPTION']
-    : ['ALL', 'NOT_STARTED', 'ASSIGNED', 'ON_HOLD', 'EXCEPTION'];
+    ? ['ALL', 'NOT_STARTED', 'BOOKED', /* 'MANUALLY_OVERRIDDEN', */ 'EXCEPTION']
+    : ['ALL', 'NOT_STARTED', 'ASSIGNED', /* 'MANUALLY_OVERRIDDEN', */ 'ON_HOLD', 'EXCEPTION'];
 
   return (
     <div className="toolbar">

@@ -6,6 +6,7 @@ interface BookingCounts {
   total: number;
   not_started: number;
   booked: number;
+  overridden: number;
   exception: number;
   accuracy: number;
 }
@@ -39,6 +40,14 @@ export function BookingStatsGrid({ lang, counts, filter, setFilter }: BookingSta
           <div className="stat-trend">{t(lang, 'bookingStats.trend.' + c.key)}</div>
         </div>
       ))}
+
+      {/* Overridden card hidden — override feature deferred
+      <div data-tone="overridden" className={`stat-card ${filter === 'MANUALLY_OVERRIDDEN' ? 'active' : ''}`}
+        onClick={() => setFilter(filter === 'MANUALLY_OVERRIDDEN' ? 'ALL' : 'MANUALLY_OVERRIDDEN')}>
+        <div className="stat-value">{overrideRate}%</div>
+        <div className="stat-label">{t(lang, 'bookingStats.overridden')}</div>
+        <div className="stat-trend">{t(lang, 'bookingStats.trend.overridden', { count: counts.overridden, total: counts.booked })}</div>
+      </div> */}
 
       {/* Pre-assign Accuracy — display only, no filter */}
       <div data-tone="accuracy" className="stat-card stat-card-accuracy">

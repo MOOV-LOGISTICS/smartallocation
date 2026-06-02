@@ -123,8 +123,8 @@ function computeAssignment(po: PO): PO {
 
 import './styles/index.css';
 
-export type Lang = 'en' | 'zh';
-export type POStatus = 'ASSIGNED' | 'NOT_STARTED' | 'ON_HOLD' | 'EXCEPTION' | 'RUNNING' | 'BOOKED_EXACT' | 'BOOKED_UPDATED';
+export type Lang = 'en' | 'zh' | 'de';
+export type POStatus = 'ASSIGNED' | 'NOT_STARTED' | 'ON_HOLD' | 'EXCEPTION' | 'RUNNING' | 'BOOKED_EXACT' | 'BOOKED_UPDATED' | 'MANUALLY_OVERRIDDEN';
 
 export interface PreassignSnapshot {
   executedAt: string;
@@ -172,9 +172,12 @@ export interface PO {
   onHoldKey?: string;
   exceptionAtStep?: number;
   exceptionKey?: string;
+  overriddenBy?: string;
+  overriddenAt?: string;
   polRegion?: string;
   podRegion?: string;
   preassignSnapshot?: PreassignSnapshot;
+  pendingAction?: string;
 }
 
 export interface Toast {
@@ -201,6 +204,11 @@ function App() {
   const [resolvePo, setResolvePo] = useState<PO | null>(null);
   const [resolveOpen, setResolveOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [interceptModal, setInterceptModal] = useState<{
+    type: 'crdLaterThanFob' | 'tooEarly';
+    po: PO;
+    computedResult: PO;
+  } | null>(null);
 
   // Carrier Booking State
   const [bookingPos, setBookingPos] = useState<PO[]>(BOOKING_MOCK_POS);
@@ -232,6 +240,7 @@ function App() {
     total: pos.length,
     not_started: pos.filter(p => p.status === 'NOT_STARTED').length,
     assigned: pos.filter(p => p.status === 'ASSIGNED').length,
+    overridden: pos.filter(p => p.status === 'MANUALLY_OVERRIDDEN').length,
     on_hold: pos.filter(p => p.status === 'ON_HOLD').length,
     exception: pos.filter(p => p.status === 'EXCEPTION').length
   }), [pos]);
@@ -268,6 +277,7 @@ function App() {
 
   const closeDrawer = () => {
     setDrawerOpen(false);
+    setInterceptModal(null);
     setTimeout(() => {
       setDrawerPo(null);
       setIsLiveRun(false);
@@ -276,17 +286,18 @@ function App() {
   };
 
   const runPreAssignLive = (po: PO) => {
-    // Compute real result FIRST so each step shows its true state during animation
     const updated = computeAssignment(po);
 
-    // Stop animation at the step that decided the outcome — no need to run further
     const failStep = updated.status === 'ON_HOLD' ? 1
       : updated.status === 'EXCEPTION' ? (updated.exceptionAtStep ?? 4)
-      : 5; // ASSIGNED → all 5 steps animate
+      : 5;
 
-    // Set drawerPo to the real result before animation starts
-    // TraceStep reads entry.result from this PO, so each completed step immediately
-    // shows its true PASS / FAIL / ON_HOLD state as the animation progresses
+    // Determine if Step 1 failure is user-fixable (intercept mid-animation)
+    const interceptType: 'crdLaterThanFob' | 'tooEarly' | null =
+      updated.exceptionKey === 'crdLaterThanFob' ? 'crdLaterThanFob'
+      : (updated.status === 'ON_HOLD' && updated.onHoldKey === 'requestTooEarly') ? 'tooEarly'
+      : null;
+
     setDrawerPo(updated);
     setDrawerOpen(true);
     setIsLiveRun(true);
@@ -295,14 +306,19 @@ function App() {
     let cur = 1;
     const interval = setInterval(() => {
       cur++;
+      // Step 1 animation just finished — pause and ask user if interceptable
+      if (cur === 2 && interceptType) {
+        clearInterval(interval);
+        setRunningStep(null);
+        setIsLiveRun(false);
+        setInterceptModal({ type: interceptType, po, computedResult: updated });
+        return;
+      }
       if (cur > failStep) {
         clearInterval(interval);
         setRunningStep(null);
         setIsLiveRun(false);
-        // Persist result to table — filter stays unchanged so user can
-        // keep running remaining LOTs in the same tab (e.g. NOT_STARTED)
         setPos(prev => prev.map(p => p.id === po.id ? updated : p));
-        // Show result-specific toast
         const label = po.moovRef || po.lot;
         if (updated.status === 'ASSIGNED') {
           showToast(t(lang, 'toast.singleDone', { po: label }), 'success');
@@ -315,6 +331,147 @@ function App() {
         setRunningStep(cur);
       }
     }, 800);
+  };
+
+  const handleRunPreAssign = (po: PO) => runPreAssignLive(po);
+
+  const handleOverride = (data: { carrier: string; service: string; vessel: string; voyage: string; etd: string; eta: string }) => {
+    if (!drawerPo) return;
+    const overridden: PO = {
+      ...drawerPo,
+      status: 'MANUALLY_OVERRIDDEN',
+      carrier: data.carrier,
+      service: data.service,
+      vessel: data.vessel,
+      voyage: data.voyage,
+      etd: data.etd,
+      eta: data.eta,
+      overriddenBy: 'z.dorothy',
+      overriddenAt: new Date().toISOString(),
+      exceptionAtStep: undefined,
+      exceptionKey: undefined,
+      onHoldKey: undefined,
+    };
+    setPos(prev => prev.map(p => p.id === overridden.id ? overridden : p));
+    setDrawerPo(overridden);
+    showToast(`${overridden.moovRef || overridden.lot} manually overridden by z.dorothy`, 'warning');
+  };
+
+  const handleBookingOverride = (data: { carrier: string; service: string; vessel: string; voyage: string; etd: string; eta: string }) => {
+    if (!bookingDrawerPo) return;
+    const overridden: PO = {
+      ...bookingDrawerPo,
+      status: 'MANUALLY_OVERRIDDEN',
+      carrier: data.carrier,
+      service: data.service,
+      vessel: data.vessel,
+      voyage: data.voyage,
+      etd: data.etd,
+      eta: data.eta,
+      overriddenBy: 'z.dorothy',
+      overriddenAt: new Date().toISOString(),
+      exceptionAtStep: undefined,
+      exceptionKey: undefined,
+      onHoldKey: undefined,
+    };
+    setBookingPos(prev => prev.map(p => p.id === overridden.id ? overridden : p));
+    setBookingDrawerPo(overridden);
+    showToast(`${overridden.moovRef || overridden.lot} booking manually overridden by z.dorothy`, 'warning');
+  };
+
+  const handleBookingDisplace = (currentPo: PO, displacedPo: PO) => {
+    const wasBooked = displacedPo.status === 'BOOKED_EXACT' || displacedPo.status === 'BOOKED_UPDATED';
+    const updated: PO = {
+      ...currentPo,
+      status: 'BOOKED_EXACT',
+      carrier: displacedPo.carrier,
+      service: displacedPo.service,
+      vessel: displacedPo.vessel,
+      voyage: displacedPo.voyage,
+      etd: displacedPo.etd,
+      eta: displacedPo.eta,
+      peta: displacedPo.peta,
+      exceptionAtStep: undefined,
+      exceptionKey: undefined,
+      onHoldKey: undefined,
+    };
+    const reset: PO = {
+      ...displacedPo,
+      status: 'NOT_STARTED',
+      carrier: undefined,
+      service: undefined,
+      vessel: undefined,
+      voyage: undefined,
+      etd: undefined,
+      eta: undefined,
+      peta: undefined,
+      pendingAction: wasBooked ? 'cancellation_required' : undefined,
+    };
+    setBookingPos(prev => prev.map(p =>
+      p.id === currentPo.id ? updated :
+      p.id === displacedPo.id ? reset : p
+    ));
+    setBookingDrawerPo(updated);
+    showToast(
+      wasBooked
+        ? `⚠️ ${currentPo.moovRef || currentPo.lot} booked via displacement · ${displacedPo.moovRef || displacedPo.lot} reset — cancellation required`
+        : `✅ ${currentPo.moovRef || currentPo.lot} booked via slot displacement · ${displacedPo.moovRef || displacedPo.lot} released`,
+      wasBooked ? 'warning' : 'success'
+    );
+  };
+
+  const handleEmailSent = (poId: number, action: string, recipient: string) => {
+    setPos(prev => prev.map(p => p.id === poId ? { ...p, pendingAction: action } : p));
+    setDrawerPo(prev => prev?.id === poId ? { ...prev, pendingAction: action } : prev);
+    const label = recipient.length > 30 ? recipient.slice(0, 30) + '…' : recipient;
+    showToast(`✅ Email sent to ${label}`, 'success');
+  };
+
+  const handleRerunWithNewCrd = (newCrd: string) => {
+    if (!drawerPo) return;
+    const newCrdWeek = etdToAllocWeek(newCrd);
+    const modifiedPo = { ...drawerPo, crd: newCrd, crdWeek: newCrdWeek, exceptionAtStep: undefined, exceptionKey: undefined, onHoldKey: undefined };
+    setPos(prev => prev.map(p => p.id === modifiedPo.id ? modifiedPo : p));
+    runPreAssignLive(modifiedPo);
+  };
+
+  const handleDisplace = (targetPo: PO, displacedPo: PO) => {
+    const assignedTarget: PO = {
+      ...targetPo,
+      status: 'ASSIGNED',
+      carrier: displacedPo.carrier,
+      service: displacedPo.service,
+      vessel: displacedPo.vessel,
+      voyage: displacedPo.voyage,
+      etd: displacedPo.etd,
+      eta: displacedPo.eta,
+      peta: displacedPo.peta,
+      exceptionAtStep: undefined,
+      exceptionKey: undefined,
+      onHoldKey: undefined,
+      pendingAction: undefined,
+    };
+    const resetDisplaced: PO = {
+      ...displacedPo,
+      status: 'NOT_STARTED',
+      carrier: undefined,
+      service: undefined,
+      vessel: undefined,
+      voyage: undefined,
+      etd: undefined,
+      eta: undefined,
+      peta: undefined,
+      priority: undefined,
+    };
+    setPos(prev => prev.map(p =>
+      p.id === targetPo.id ? assignedTarget :
+      p.id === displacedPo.id ? resetDisplaced : p
+    ));
+    setDrawerPo(assignedTarget);
+    showToast(
+      `✅ ${targetPo.moovRef || targetPo.lot} allocated · ${displacedPo.moovRef || displacedPo.lot} reset to NOT_STARTED`,
+      'warning'
+    );
   };
 
   const handleBatchRun = () => {
@@ -364,7 +521,7 @@ function App() {
   };
 
   // Carrier Booking Logic
-  const BOOKED_STATUSES: POStatus[] = ['BOOKED_EXACT', 'BOOKED_UPDATED', 'ASSIGNED'];
+  const BOOKED_STATUSES: POStatus[] = ['BOOKED_EXACT', 'BOOKED_UPDATED', 'ASSIGNED', 'MANUALLY_OVERRIDDEN'];
 
   const bookingCounts = useMemo(() => {
     const exactMatch = bookingPos.filter(p => p.status === 'BOOKED_EXACT').length;
@@ -375,6 +532,7 @@ function App() {
       total: bookingPos.length,
       not_started: bookingPos.filter(p => p.status === 'NOT_STARTED').length,
       booked: bookingPos.filter(p => BOOKED_STATUSES.includes(p.status as POStatus)).length,
+      overridden: bookingPos.filter(p => p.status === 'MANUALLY_OVERRIDDEN').length,
       exception: bookingPos.filter(p => p.status === 'EXCEPTION').length,
       exactMatch,
       withSnapshot: bookedTotal,
@@ -397,8 +555,8 @@ function App() {
       if (!usage[key]) usage[key] = { preassign: 0, booked: 0 };
       usage[key][type] += p.teu;
     };
-    pos.filter(p => p.status === 'ASSIGNED').forEach(p => accumulate(p, 'preassign'));
-    bookingPos.filter(p => p.status === 'BOOKED_EXACT' || p.status === 'BOOKED_UPDATED').forEach(p => accumulate(p, 'booked'));
+    pos.filter(p => p.status === 'ASSIGNED' || p.status === 'MANUALLY_OVERRIDDEN').forEach(p => accumulate(p, 'preassign'));
+    bookingPos.filter(p => p.status === 'BOOKED_EXACT' || p.status === 'BOOKED_UPDATED' || p.status === 'MANUALLY_OVERRIDDEN').forEach(p => accumulate(p, 'booked'));
     return usage;
   }, [pos, bookingPos]);
 
@@ -582,7 +740,7 @@ function App() {
               toggleSelect={toggleSelect}
               toggleSelectAll={toggleSelectAll}
               openDrawer={openDrawer}
-              runPreAssignLive={runPreAssignLive}
+              runPreAssignLive={handleRunPreAssign}
             />
           </div>
         </>
@@ -672,6 +830,37 @@ function App() {
         }}
         allocationUsage={allocationUsage}
         initialAllocation={INITIAL_ALLOCATION}
+        onOverride={handleOverride}
+        allPOs={pos}
+        onEmailSent={handleEmailSent}
+        onDisplace={handleDisplace}
+        onRerunWithNewCrd={handleRerunWithNewCrd}
+        agentIntercept={interceptModal ? {
+          type: interceptModal.type,
+          po: interceptModal.po,
+          onModifyAndRun: (newCrd) => {
+            const newCrdWeek = etdToAllocWeek(newCrd);
+            const modifiedPo = { ...interceptModal.po, crd: newCrd, crdWeek: newCrdWeek };
+            setInterceptModal(null);
+            runPreAssignLive(modifiedPo);
+          },
+          onProceedAsIs: () => {
+            const result = interceptModal.computedResult;
+            setInterceptModal(null);
+            setPos(prev => prev.map(p => p.id === result.id ? result : p));
+            const label = result.moovRef || result.lot;
+            if (result.status === 'ON_HOLD') {
+              showToast(t(lang, 'toast.singleOnHold', { po: label }), 'warning');
+            } else {
+              showToast(t(lang, 'toast.singleException', { po: label, n: result.exceptionAtStep ?? 1 }), 'error');
+            }
+          },
+          onCancel: () => {
+            setInterceptModal(null);
+            closeDrawer();
+          },
+          onEmailSent: handleEmailSent,
+        } : null}
       />
       <ResolveModal
         po={resolvePo}
@@ -704,6 +893,9 @@ function App() {
           setBookingResolvePo(bookingDrawerPo);
           setBookingResolveOpen(true);
         }}
+        onOverride={handleBookingOverride}
+        allPos={bookingPos}
+        onDisplace={handleBookingDisplace}
       />
       <BookingResolveModal
         po={bookingResolvePo}

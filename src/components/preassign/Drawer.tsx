@@ -5,7 +5,19 @@ import { t } from '../../i18n';
 import { buildTraceLog, TraceEntry } from '../../utils/traceBuilder';
 import { StatusPill } from '../common/StatusPill';
 import { TraceStep } from './TraceStep';
-import { IconClose, IconRefresh, IconSparkle, IconAlert } from '../icons/index';
+import { AgentPrompt, StaticAgentAction } from './AgentPrompt';
+import { OverridePanel } from './OverridePanel';
+import { DisplacementPanel } from './DisplacementPanel';
+import { IconClose, IconRefresh, IconSparkle, IconAlert, IconEdit } from '../icons/index';
+
+interface AgentIntercept {
+  type: 'crdLaterThanFob' | 'tooEarly';
+  po: PO;
+  onModifyAndRun: (newCrd: string) => void;
+  onProceedAsIs: () => void;
+  onCancel: () => void;
+  onEmailSent?: (poId: number, action: string, recipient: string) => void;
+}
 
 interface DrawerProps {
   po: PO | null;
@@ -18,18 +30,46 @@ interface DrawerProps {
   onGoToException?: () => void;
   allocationUsage?: Record<string, { preassign: number; booked: number }>;
   initialAllocation?: Record<string, number>;
+  agentIntercept?: AgentIntercept | null;
+  onOverride?: (data: { carrier: string; service: string; vessel: string; voyage: string; etd: string; eta: string }) => void;
+  allPOs?: PO[];
+  onEmailSent?: (poId: number, action: string, recipient: string) => void;
+  onDisplace?: (targetPo: PO, displacedPo: PO) => void;
+  onRerunWithNewCrd?: (newCrd: string) => void;
 }
 
-export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException, allocationUsage, initialAllocation }: DrawerProps) {
+
+export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException, allocationUsage, initialAllocation, agentIntercept, onOverride, allPOs = [], onEmailSent, onDisplace, onRerunWithNewCrd }: DrawerProps) {
   const trace = useMemo(() => po ? buildTraceLog(po, lang, allocationUsage, initialAllocation) : [], [po, lang, allocationUsage, initialAllocation]);
   const isLive = isLiveRun && runningStep !== null;
+  const [showOverride, setShowOverride] = useState(false);
+  const [showDisplacement, setShowDisplacement] = useState(false);
   const progressPct = isLive
     ? Math.min(100, (runningStep - 1) / 5 * 100)
     : po
       ? (po.status === 'ASSIGNED' ? 100 : po.status === 'ON_HOLD' ? (1 / 5 * 100) : ((Math.min(po.exceptionAtStep || 1, 4) - 1) / 5 * 100))
       : 0;
 
+  // Candidates for slot displacement: same lane, ASSIGNED, later CRD week than current PO
+  const displacementCandidates = useMemo(() => {
+    if (!po) return [];
+    const currentPo = po;
+    const crdNum = parseInt(currentPo.crdWeek.split('/')[0]);
+    return allPOs.filter(p =>
+      p.id !== currentPo.id &&
+      p.pol === currentPo.pol &&
+      p.pod === currentPo.pod &&
+      p.status === 'ASSIGNED' &&
+      parseInt(p.crdWeek.split('/')[0]) > crdNum
+    );
+  }, [po, allPOs]);
+
   if (!po) return null;
+
+  const isDisplacementException =
+    po.exceptionAtStep === 3 ||
+    po.exceptionKey === 'noAllocation' ||
+    po.exceptionKey === 'noSpace';
 
   return (
     <>
@@ -90,22 +130,97 @@ export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lan
             />
           </div>
 
-          {trace.map((entry) => (
-            <TraceStep key={entry.step} entry={entry} currentStep={isLive ? runningStep : null} lang={lang} />
-          ))}
+          {(() => {
+            const steps = agentIntercept ? trace.slice(0, 1) : trace;
+            // For static (non-live) exceptions/holds, insert agent bubble after the failing step
+            const staticFailStep = (!isLive && !agentIntercept && (po.status === 'EXCEPTION' || po.status === 'ON_HOLD'))
+              ? (po.status === 'ON_HOLD' ? 1 : (po.exceptionAtStep ?? 1))
+              : null;
+            return steps.map((entry) => (
+              <React.Fragment key={entry.step}>
+                <TraceStep entry={entry} currentStep={isLive ? runningStep : null} lang={lang} />
+                {staticFailStep === entry.step && (
+                  <StaticAgentAction po={po} lang={lang} onEmailSent={onEmailSent} onRerunWithNewCrd={onRerunWithNewCrd} />
+                )}
+              </React.Fragment>
+            ));
+          })()}
 
-          {!isLive && po.status === 'ASSIGNED' && <ResultCardAssigned po={po} lang={lang} />}
-          {!isLive && po.status === 'ON_HOLD' && <ResultCardOnHold po={po} lang={lang} />}
-          {!isLive && po.status === 'EXCEPTION' && <ResultCardException po={po} lang={lang} />}
+          {agentIntercept && (
+            <AgentPrompt
+              type={agentIntercept.type}
+              po={agentIntercept.po}
+              lang={lang}
+              onModifyAndRun={agentIntercept.onModifyAndRun}
+              onProceedAsIs={agentIntercept.onProceedAsIs}
+              onCancel={agentIntercept.onCancel}
+              onEmailSent={agentIntercept.onEmailSent}
+            />
+          )}
+
+          {!isLive && !agentIntercept && po.status === 'ASSIGNED' && (
+            <ResultCardAssigned po={po} lang={lang} />
+          )}
+          {/* Override panel hidden — feature deferred
+          {!isLive && !agentIntercept && po.status === 'ASSIGNED' && showOverride && onOverride && (
+            <OverridePanel po={po} lang={lang}
+              onConfirm={(data) => { onOverride(data); setShowOverride(false); }}
+              onCancel={() => setShowOverride(false)} />
+          )}
+          {!isLive && !agentIntercept && po.status === 'MANUALLY_OVERRIDDEN' && (
+            <ResultCardOverridden po={po} lang={lang} />
+          )} */}
+          {!isLive && !agentIntercept && po.status === 'ON_HOLD' && (
+            <ResultCardOnHold po={po} lang={lang} pendingAction={po.pendingAction} />
+          )}
+          {!isLive && !agentIntercept && po.status === 'EXCEPTION' && (
+            <>
+              <ResultCardException po={po} lang={lang} pendingAction={po.pendingAction} />
+              {isDisplacementException && !showDisplacement && !po.pendingAction && (
+                <motion.div className="mt-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <button
+                    onClick={() => setShowDisplacement(true)}
+                    className="w-full py-2 text-xs font-medium border border-dashed border-[#FED8C0] text-[#E8650A] rounded-lg hover:bg-[#FEF1E7] transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                      <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                    </svg>
+                    Displace a LOT to free up allocation
+                  </button>
+                </motion.div>
+              )}
+              {isDisplacementException && showDisplacement && onDisplace && (
+                <DisplacementPanel
+                  po={po}
+                  candidatePOs={displacementCandidates}
+                  lang={lang}
+                  onConfirm={(displaced) => {
+                    onDisplace(po, displaced);
+                    setShowDisplacement(false);
+                  }}
+                  onCancel={() => setShowDisplacement(false)}
+                />
+              )}
+            </>
+          )}
         </div>
 
-        <div className="px-6 py-3 border-t border-[#DEE5EC] bg-white flex-shrink-0 flex gap-2 justify-end">
+        <div className="px-6 py-3 border-t border-[#DEE5EC] bg-white flex-shrink-0 flex gap-2 justify-end flex-wrap">
           {po.status === 'EXCEPTION' && onGoToException && (
             <button
               onClick={onGoToException}
-              className="px-3 py-1.5 text-xs font-medium bg-[#004F7C] text-white rounded hover:bg-[#337296] transition-colors"
+              className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors"
             >
               Resolve
+            </button>
+          )}
+          {(po.status === 'EXCEPTION' || po.status === 'ON_HOLD') && (
+            <button
+              onClick={onRerun}
+              className="px-3 py-1.5 text-xs font-medium bg-[#004F7C] text-white rounded hover:bg-[#337296] transition-colors flex items-center gap-1"
+            >
+              <IconRefresh /> Re-run
             </button>
           )}
           {po.status === 'ASSIGNED' && (
@@ -116,11 +231,25 @@ export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lan
               <IconRefresh /> {t(lang, 'btn.rerun')}
             </button>
           )}
+          {/* Override & Re-run AI buttons hidden — override feature deferred
+          {po.status === 'ASSIGNED' && !showOverride && onOverride && (
+            <button onClick={() => setShowOverride(true)}
+              className="px-3 py-1.5 text-xs font-medium border border-[#E9D5FF] text-[#6D28D9] rounded hover:bg-[#F5F3FF] transition-colors flex items-center gap-1">
+              <IconEdit /> Override
+            </button>
+          )}
+          {po.status === 'MANUALLY_OVERRIDDEN' && (
+            <button onClick={onRerun}
+              className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors flex items-center gap-1">
+              <IconRefresh /> Re-run AI
+            </button>
+          )} */}
           <button onClick={onClose} className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors">
             {t(lang, 'btn.close')}
           </button>
         </div>
       </motion.div>
+
     </>
   );
 }
@@ -158,9 +287,9 @@ function ResultCardAssigned({ po, lang }: { po: PO; lang: Lang }) {
   );
 }
 
-function ResultCardOnHold({ po, lang }: { po: PO; lang: Lang }) {
+function ResultCardOnHold({ po, lang, pendingAction }: { po: PO; lang: Lang; pendingAction?: string }) {
   return (
-    <motion.div 
+    <motion.div
       className="bg-[#FEF1E7] border border-[#FED8C0] rounded-lg p-4 mt-5"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -168,6 +297,11 @@ function ResultCardOnHold({ po, lang }: { po: PO; lang: Lang }) {
       <div className="flex items-center gap-2 mb-3">
         <IconAlert />
         <h4 className="text-sm font-bold text-[#FE5000]">{t(lang, 'result.onHoldTitle')}</h4>
+        {pendingAction && (
+          <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#DBEAFE] text-[#1D4ED8]">
+            ✉ Awaiting OWIM
+          </span>
+        )}
       </div>
       <div className="text-xs text-[#0F1E2E] leading-relaxed">
         {t(lang, 'onHoldReasons.' + (po.onHoldKey || 'crdLater'))}
@@ -176,9 +310,14 @@ function ResultCardOnHold({ po, lang }: { po: PO; lang: Lang }) {
   );
 }
 
-function ResultCardException({ po, lang }: { po: PO; lang: Lang }) {
+function ResultCardException({ po, lang, pendingAction }: { po: PO; lang: Lang; pendingAction?: string }) {
+  const pendingLabel =
+    pendingAction === 'vddl' ? '✉ VDDL Submitted'
+    : pendingAction === 'customer' ? '✉ Pending Customer'
+    : null;
+
   return (
-    <motion.div 
+    <motion.div
       className="bg-[#fef2f2] border border-[#fecaca] rounded-lg p-4 mt-5"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -186,10 +325,43 @@ function ResultCardException({ po, lang }: { po: PO; lang: Lang }) {
       <div className="flex items-center gap-2 mb-3">
         <IconAlert />
         <h4 className="text-sm font-bold text-[#dc2626]">{t(lang, 'result.exceptionTitle')}</h4>
+        {pendingLabel && (
+          <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#D1FAE5] text-[#065F46]">
+            {pendingLabel}
+          </span>
+        )}
       </div>
       <div className="text-xs text-[#0F1E2E] leading-relaxed">
         <strong>{t(lang, 'result.failedAtStep', { n: po.exceptionAtStep || 1 })}</strong>
         {t(lang, 'exceptionReasons.' + (po.exceptionKey || 'noSpace'))}
+      </div>
+    </motion.div>
+  );
+}
+
+function ResultCardOverridden({ po, lang }: { po: PO; lang: Lang }) {
+  const ts = po.overriddenAt ? new Date(po.overriddenAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  return (
+    <motion.div
+      className="bg-[#F5F3FF] border border-[#E9D5FF] rounded-lg p-4 mt-5"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <IconEdit />
+        <h4 className="text-sm font-bold text-[#6D28D9]">Manually Overridden</h4>
+        {po.overriddenBy && (
+          <span className="ml-auto text-[10px] text-[#8A98AB] font-mono">{po.overriddenBy} · {ts}</span>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2.5">
+        <ResultItem label={t(lang, 'result.carrier')} value={po.carrier || ''} />
+        <ResultItem label={t(lang, 'result.service')} value={po.service || ''} />
+        <div className="col-span-2">
+          <ResultItem label={t(lang, 'result.vesselVoyage')} value={`${po.vessel} · ${po.voyage}`} />
+        </div>
+        <ResultItem label={t(lang, 'result.etd')} value={po.etd || ''} />
+        <ResultItem label={t(lang, 'result.eta')} value={po.eta || ''} />
       </div>
     </motion.div>
   );

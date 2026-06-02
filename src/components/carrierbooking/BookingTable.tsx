@@ -51,20 +51,20 @@ export function BookingTable({
       <div className="table-wrap">
         <table>
           <colgroup>
-            <col style={{ width: 38 }} />
-            <col style={{ width: 130 }} />
-            <col style={{ width: 130 }} />
-            <col style={{ width: 56 }} />
-            <col style={{ width: 56 }} />
-            <col style={{ width: 62 }} />
-            <col style={{ width: 62 }} />
-            <col style={{ width: 130 }} />
-            <col style={{ width: 78 }} />
-            <col style={{ width: 148 }} />
-            <col style={{ width: 130 }} />
-            <col style={{ width: 96 }} />
-            <col style={{ width: 88 }} />
-            <col style={{ width: 50 }} />
+            <col style={{ width: 38 }} />   {/* checkbox */}
+            <col style={{ width: 130 }} />  {/* moovRef / LOT */}
+            <col style={{ width: 130 }} />  {/* article */}
+            <col style={{ width: 56 }} />   {/* POL */}
+            <col style={{ width: 56 }} />   {/* POD */}
+            <col style={{ width: 62 }} />   {/* TEU */}
+            <col style={{ width: 62 }} />   {/* CTR TYPE */}
+            <col style={{ width: 130 }} />  {/* CRD·FOB·LDD */}
+            <col style={{ width: 78 }} />   {/* SRD */}
+            <col style={{ width: 148 }} />  {/* CARRIER/VESSEL */}
+            <col style={{ width: 130 }} />  {/* ETD/ETA */}
+            <col style={{ width: 96 }} />   {/* BOOKING REF */}
+            <col style={{ width: 88 }} />   {/* STATUS */}
+            <col style={{ width: 50 }} />   {/* actions */}
           </colgroup>
           <thead>
             <tr>
