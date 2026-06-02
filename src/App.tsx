@@ -379,6 +379,46 @@ function App() {
     showToast(`${overridden.moovRef || overridden.lot} booking manually overridden by z.dorothy`, 'warning');
   };
 
+  const handleBookingDisplace = (currentPo: PO, displacedPo: PO) => {
+    const wasBooked = displacedPo.status === 'BOOKED_EXACT' || displacedPo.status === 'BOOKED_UPDATED';
+    const updated: PO = {
+      ...currentPo,
+      status: 'BOOKED_EXACT',
+      carrier: displacedPo.carrier,
+      service: displacedPo.service,
+      vessel: displacedPo.vessel,
+      voyage: displacedPo.voyage,
+      etd: displacedPo.etd,
+      eta: displacedPo.eta,
+      peta: displacedPo.peta,
+      exceptionAtStep: undefined,
+      exceptionKey: undefined,
+      onHoldKey: undefined,
+    };
+    const reset: PO = {
+      ...displacedPo,
+      status: 'NOT_STARTED',
+      carrier: undefined,
+      service: undefined,
+      vessel: undefined,
+      voyage: undefined,
+      etd: undefined,
+      eta: undefined,
+      peta: undefined,
+      pendingAction: wasBooked ? 'cancellation_required' : undefined,
+    };
+    setBookingPos(prev => prev.map(p =>
+      p.id === currentPo.id ? updated :
+      p.id === displacedPo.id ? reset : p
+    ));
+    setBookingDrawerPo(updated);
+    showToast(
+      wasBooked
+        ? `⚠️ ${currentPo.moovRef || currentPo.lot} booked via displacement · ${displacedPo.moovRef || displacedPo.lot} reset — cancellation required`
+        : `✅ ${currentPo.moovRef || currentPo.lot} booked via slot displacement · ${displacedPo.moovRef || displacedPo.lot} released`,
+      wasBooked ? 'warning' : 'success'
+    );
+  };
 
   const handleEmailSent = (poId: number, action: string, recipient: string) => {
     setPos(prev => prev.map(p => p.id === poId ? { ...p, pendingAction: action } : p));
@@ -854,6 +894,8 @@ function App() {
           setBookingResolveOpen(true);
         }}
         onOverride={handleBookingOverride}
+        allPos={bookingPos}
+        onDisplace={handleBookingDisplace}
       />
       <BookingResolveModal
         po={bookingResolvePo}

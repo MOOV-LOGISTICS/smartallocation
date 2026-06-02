@@ -18,9 +18,11 @@ interface BookingDrawerProps {
   lang: Lang;
   onGoToException?: () => void;
   onOverride?: (data: { carrier: string; service: string; vessel: string; voyage: string; etd: string; eta: string }) => void;
+  allPos?: PO[];
+  onDisplace?: (current: PO, displaced: PO) => void;
 }
 
-export function BookingDrawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException, onOverride }: BookingDrawerProps) {
+export function BookingDrawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException, onOverride, allPos, onDisplace }: BookingDrawerProps) {
   const [activeTab, setActiveTab] = useState<'snapshot' | 'run'>('run');
   const [showOverride, setShowOverride] = useState(false);
   const trace = useMemo(() => po ? buildTraceLog(po, lang) : [], [po, lang]);
@@ -145,7 +147,12 @@ export function BookingDrawer({ po, open, onClose, runningStep, isLiveRun, onRer
               </div>
 
               {trace.map(entry => (
-                <BookingTraceStep key={entry.step} entry={entry} currentStep={isLive ? runningStep : null} lang={lang} />
+                <React.Fragment key={entry.step}>
+                  <BookingTraceStep entry={entry} currentStep={isLive ? runningStep : null} lang={lang} />
+                  {!isLive && po.status === 'EXCEPTION' && po.exceptionAtStep === entry.step && allPos && onDisplace && (
+                    <SlotDisplacementAgent po={po} allPos={allPos} onDisplace={onDisplace} lang={lang} />
+                  )}
+                </React.Fragment>
               ))}
 
               {!isLive && po.status === 'BOOKED_EXACT' && <ResultCardBooked po={po} exact lang={lang} />}
@@ -400,6 +407,180 @@ function ResultItem({ label, value }: { label: string; value: string }) {
     <div>
       <div className="text-[10px] text-[#8A98AB] uppercase tracking-wider font-semibold">{label}</div>
       <div className="text-sm font-mono mt-0.5 text-[#0F1E2E] font-medium">{value}</div>
+    </div>
+  );
+}
+
+// ── Slot Displacement Agent ───────────────────────────────────────────────────
+
+function crdBufferDays(crd: string, ldd: string) {
+  return Math.floor((new Date(ldd).getTime() - new Date(crd).getTime()) / 86400000);
+}
+
+function SlotDisplacementAgent({
+  po, allPos, onDisplace,
+}: {
+  po: PO; allPos: PO[]; onDisplace: (current: PO, displaced: PO) => void; lang: Lang;
+}) {
+  const [selectedId, setSelectedId] = React.useState<number | null>(null);
+  const [confirming, setConfirming] = React.useState(false);
+
+  const isEligible = (p: PO) =>
+    p.id !== po.id &&
+    p.pol === po.pol &&
+    p.pod === po.pod &&
+    ['ASSIGNED', 'BOOKED_EXACT', 'BOOKED_UPDATED'].includes(p.status) &&
+    !!p.ldd && !!p.crd &&
+    crdBufferDays(p.crd, p.ldd) >= 20;
+
+  const candidates = useMemo(() => allPos.filter(isEligible), [allPos, po]);
+  const preassignList = candidates.filter(p => p.status === 'ASSIGNED').slice(0, 3);
+  const bookedList = candidates.filter(p => p.status === 'BOOKED_EXACT' || p.status === 'BOOKED_UPDATED').slice(0, 3);
+
+  if (preassignList.length === 0 && bookedList.length === 0) return null;
+
+  const selectedPo = candidates.find(p => p.id === selectedId);
+  const isPreassign = selectedPo?.status === 'ASSIGNED';
+
+  const handleConfirm = () => {
+    if (!selectedPo) return;
+    onDisplace(po, selectedPo);
+    setConfirming(false);
+  };
+
+  return (
+    <motion.div
+      className="mt-5 flex gap-3"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+    >
+      <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#004F7C] flex items-center justify-center text-white mt-0.5">
+        <IconSparkle />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] font-semibold text-[#004F7C] uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+          <span>AI Agent</span>
+          <span className="text-[#C5CFDB]">·</span>
+          <span className="text-[#8A98AB] font-normal normal-case tracking-normal">Slot Displacement</span>
+        </div>
+        <div className="bg-white border border-[#DEE5EC] rounded-xl rounded-tl-sm p-4 shadow-sm">
+          {confirming && selectedPo ? (
+            <div>
+              <p className="text-sm font-semibold text-[#0F1E2E] mb-1">Confirm Override</p>
+              <p className="text-xs text-[#4A5A6E] mb-4 leading-relaxed">
+                {isPreassign
+                  ? <><span className="font-mono font-semibold">{selectedPo.moovRef}</span> ({selectedPo.lot}) is <span className="text-[#D97706] font-semibold">pre-assigned only</span> — displacing will release its vessel slot with no carrier impact.</>
+                  : <><span className="text-[#DC2626] font-semibold">⚠️ {selectedPo.moovRef}</span> ({selectedPo.lot}) is <span className="font-semibold">carrier-booked</span>. Displacing requires cancellation of the existing booking. Proceed with caution.</>}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleConfirm}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg text-white transition-colors ${isPreassign ? 'bg-[#004F7C] hover:bg-[#337296]' : 'bg-[#DC2626] hover:bg-[#B91C1C]'}`}
+                >
+                  {isPreassign ? 'Confirm' : '⚠️ Confirm & Cancel Booking'}
+                </button>
+                <button
+                  onClick={() => setConfirming(false)}
+                  className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded-lg hover:bg-[#F8FAFC] transition-colors"
+                >
+                  Back
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-[#0F1E2E] leading-relaxed mb-3">
+                Allocation week <span className="font-mono font-semibold">{po.crdWeek}</span> is fully booked on{' '}
+                <span className="font-mono font-semibold">{po.pol} → {po.pod}</span>.
+                Found <span className="font-semibold">{candidates.length} LOT{candidates.length !== 1 ? 's' : ''}</span> with CRD buffer ≥ 20 days that can be override:
+              </p>
+
+              {preassignList.length > 0 && (
+                <div className="mb-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="w-2 h-2 rounded-full bg-[#F59E0B] flex-shrink-0" />
+                    <span className="text-[10px] font-bold text-[#92400E] uppercase tracking-wider">Pre-assigned · Not yet carrier-booked</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {preassignList.map(p => (
+                      <DisplacementCard key={p.id} p={p} selected={selectedId === p.id} onSelect={() => setSelectedId(selectedId === p.id ? null : p.id)} tier="preassign" />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {bookedList.length > 0 && (
+                <div className="mb-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="w-2 h-2 rounded-full bg-[#EF4444] flex-shrink-0" />
+                    <span className="text-[10px] font-bold text-[#991B1B] uppercase tracking-wider">Carrier Booked · Cancellation required</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {bookedList.map(p => (
+                      <DisplacementCard key={p.id} p={p} selected={selectedId === p.id} onSelect={() => setSelectedId(selectedId === p.id ? null : p.id)} tier="booked" />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                disabled={!selectedId}
+                onClick={() => setConfirming(true)}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-[#004F7C] hover:bg-[#337296] transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Confirm Override
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function DisplacementCard({ p, selected, onSelect, tier }: {
+  p: PO; selected: boolean; onSelect: () => void; tier: 'preassign' | 'booked';
+}) {
+  const buffer = p.ldd && p.crd ? crdBufferDays(p.crd, p.ldd) : 0;
+  const supplier = p.supplier?.split('/')[0]?.trim() || '—';
+  return (
+    <div
+      onClick={onSelect}
+      className={`rounded-lg border px-3 py-2.5 cursor-pointer transition-all text-xs select-none ${
+        selected
+          ? 'border-[#004F7C] bg-[#EFF6FF] shadow-sm'
+          : tier === 'preassign'
+            ? 'border-[#FDE68A] bg-[#FFFBEB] hover:border-[#F59E0B]'
+            : 'border-[#FECACA] bg-[#FFF5F5] hover:border-[#EF4444]'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <div>
+          <span className="font-semibold font-mono text-[#0F1E2E]">{p.moovRef}</span>
+          <span className="text-[#8A98AB] ml-1.5 text-[11px]">{p.lot}</span>
+        </div>
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${
+          tier === 'preassign' ? 'bg-[#FEF3C7] text-[#92400E]' : 'bg-[#FEE2E2] text-[#991B1B]'
+        }`}>
+          {tier === 'preassign' ? '🟡 Pre-assigned' : '🔴 Carrier Booked'}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-x-3 text-[11px] text-[#4A5A6E] mb-1">
+        <div><span className="text-[#8A98AB]">Supplier: </span>{supplier}</div>
+        <div><span className="text-[#8A98AB]">CRD: </span><span className="font-mono">{p.crdWeek}</span></div>
+        <div>
+          <span className="text-[#8A98AB]">Buffer: </span>
+          <span className={`font-semibold ${buffer >= 50 ? 'text-[#047857]' : 'text-[#D97706]'}`}>{buffer}d</span>
+        </div>
+      </div>
+      {(p.vessel || p.carrier) && (
+        <div className="text-[11px] text-[#4A5A6E]">
+          <span className="text-[#8A98AB]">Vessel: </span>
+          <span className="font-mono">{p.vessel} / {p.voyage}</span>
+          {p.etd && <><span className="text-[#8A98AB] ml-2">ETD </span><span className="font-mono">{p.etd}</span></>}
+        </div>
+      )}
     </div>
   );
 }

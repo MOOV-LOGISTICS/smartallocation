@@ -403,7 +403,7 @@ export function StaticAgentAction({ po, lang, onEmailSent, onRerunWithNewCrd }: 
                 onClick={() => setShowEmail(true)}
                 className="px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-[#004F7C] hover:bg-[#337296] transition-colors flex items-center gap-1.5"
               >
-                <SendIcon /> Send to OWIM for approval
+                <SendIcon /> Send to OWIN
               </button>
             ) : (
               <InlineEmailComposer
@@ -499,7 +499,7 @@ export function StaticAgentAction({ po, lang, onEmailSent, onRerunWithNewCrd }: 
                 onClick={() => setShowEmail(true)}
                 className="px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-[#004F7C] hover:bg-[#337296] transition-colors flex items-center gap-1.5"
               >
-                <SendIcon /> Send to Customer
+                <SendIcon /> Re-route & Request approval
               </button>
             ) : (
               <InlineEmailComposer
@@ -527,7 +527,7 @@ export function StaticAgentAction({ po, lang, onEmailSent, onRerunWithNewCrd }: 
                 onClick={() => setShowEmail(true)}
                 className="px-3 py-1.5 text-xs font-semibold rounded-lg text-white bg-[#004F7C] hover:bg-[#337296] transition-colors flex items-center gap-1.5"
               >
-                <SendIcon /> Send to Customer
+                <SendIcon /> Re-route & Request approval
               </button>
             ) : (
               <InlineEmailComposer
