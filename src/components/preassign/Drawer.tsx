@@ -7,6 +7,8 @@ import { StatusPill } from '../common/StatusPill';
 import { TraceStep } from './TraceStep';
 import { AgentPrompt } from './AgentPrompt';
 import { OverridePanel } from './OverridePanel';
+import { DisplacementPanel } from './DisplacementPanel';
+import { EmailModal } from '../common/EmailModal';
 import { IconClose, IconRefresh, IconSparkle, IconAlert, IconEdit } from '../icons/index';
 
 interface AgentIntercept {
@@ -16,6 +18,8 @@ interface AgentIntercept {
   onProceedAsIs: () => void;
   onCancel: () => void;
 }
+
+type EmailActionType = 'owim' | 'vddl' | 'customer';
 
 interface DrawerProps {
   po: PO | null;
@@ -30,19 +34,132 @@ interface DrawerProps {
   initialAllocation?: Record<string, number>;
   agentIntercept?: AgentIntercept | null;
   onOverride?: (data: { carrier: string; service: string; vessel: string; voyage: string; etd: string; eta: string }) => void;
+  allPOs?: PO[];
+  onEmailSent?: (poId: number, action: string, recipient: string) => void;
+  onDisplace?: (targetPo: PO, displacedPo: PO) => void;
 }
 
-export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException, allocationUsage, initialAllocation, agentIntercept, onOverride }: DrawerProps) {
+function buildEmailContent(type: EmailActionType, po: PO): { subject: string; body: string; defaultTo: string; readOnlyRows: { label: string; value: string }[] } {
+  const lot = po.moovRef || po.lot;
+  const readOnlyRows = [
+    { label: 'LOT Nr', value: lot },
+    { label: 'Batch', value: po.batch },
+    { label: 'Supplier', value: po.supplier },
+    { label: 'POL / POD', value: `${po.pol} → ${po.pod}` },
+    { label: 'FOB Wk', value: po.fobWeek },
+    { label: 'CRD Wk', value: po.crdWeek },
+    { label: 'LDD', value: po.ldd },
+  ];
+
+  if (type === 'owim') {
+    return {
+      defaultTo: 'OWIM_Ware_Zulauf@lidl.com',
+      subject: `Early Shipment Approval Request – ${lot} Batch ${po.batch}`,
+      readOnlyRows,
+      body: `Dear OWIM Team,
+
+We would like to request your instructions on the following LOT which is scheduled earlier than the confirmed FOB window.
+
+LOT: ${lot} | Batch: ${po.batch}
+Original FOB: Wk ${po.fobWeek} | CRD: Wk ${po.crdWeek}
+Supplier: ${po.supplier}
+
+The CRD is more than 4 weeks ahead of FOB and the LOT is not in the Early Shipment List.
+
+Please confirm: Proceed with early shipment / Place on hold?
+
+Best regards,
+z.dorothy | MOOV Logistics`,
+    };
+  }
+
+  if (type === 'vddl') {
+    return {
+      defaultTo: '',
+      subject: `VDDL Entry Request – ${lot} Batch ${po.batch}`,
+      readOnlyRows,
+      body: `Dear Team,
+
+Please add the following LOT to VDDL for further handling.
+
+LOT: ${lot} | Batch: ${po.batch}
+CRD Wk ${po.crdWeek} falls after FOB Wk ${po.fobWeek} — cargo will not be ready before vessel departure.
+Vessel scheduling is not possible until the dates are corrected by the supplier.
+
+Please advise on next steps.
+
+Best regards,
+z.dorothy | MOOV Logistics`,
+    };
+  }
+
+  // customer
+  return {
+    defaultTo: '',
+    subject: `Sailing Options / Re-route Request – ${lot} Batch ${po.batch}`,
+    readOnlyRows,
+    body: `Dear [Customer],
+
+All available sailings for ${po.pod} have ETA/PETA later than LDD (${po.ldd}).
+We would like to propose the following options and request your confirmation:
+
+Option 1 – Alternative Sailing (${po.pod}):
+[Please specify preferred vessel / voyage from below options]
+
+Option 2 – Re-route to RTM:
+[RTM sailings with earlier ETA available — details to follow]
+
+Please advise your preferred option at your earliest convenience so we can proceed with booking.
+
+Best regards,
+z.dorothy | MOOV Logistics`,
+  };
+}
+
+export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException, allocationUsage, initialAllocation, agentIntercept, onOverride, allPOs = [], onEmailSent, onDisplace }: DrawerProps) {
   const trace = useMemo(() => po ? buildTraceLog(po, lang, allocationUsage, initialAllocation) : [], [po, lang, allocationUsage, initialAllocation]);
   const isLive = isLiveRun && runningStep !== null;
   const [showOverride, setShowOverride] = useState(false);
+  const [emailAction, setEmailAction] = useState<EmailActionType | null>(null);
+  const [showDisplacement, setShowDisplacement] = useState(false);
   const progressPct = isLive
     ? Math.min(100, (runningStep - 1) / 5 * 100)
     : po
       ? (po.status === 'ASSIGNED' ? 100 : po.status === 'ON_HOLD' ? (1 / 5 * 100) : ((Math.min(po.exceptionAtStep || 1, 4) - 1) / 5 * 100))
       : 0;
 
+  // Candidates for slot displacement: same lane, ASSIGNED, later CRD week than current PO
+  const displacementCandidates = useMemo(() => {
+    if (!po) return [];
+    const currentPo = po;
+    const crdNum = parseInt(currentPo.crdWeek.split('/')[0]);
+    return allPOs.filter(p =>
+      p.id !== currentPo.id &&
+      p.pol === currentPo.pol &&
+      p.pod === currentPo.pod &&
+      p.status === 'ASSIGNED' &&
+      parseInt(p.crdWeek.split('/')[0]) > crdNum
+    );
+  }, [po, allPOs]);
+
+  const emailContent = useMemo(() => {
+    if (!po || !emailAction) return null;
+    return buildEmailContent(emailAction, po);
+  }, [emailAction, po]);
+
   if (!po) return null;
+
+  // Determine which email action to show for the current PO state
+  const availableEmailAction: EmailActionType | null =
+    po.onHoldKey === 'requestTooEarly' ? 'owim'
+    : po.exceptionKey === 'crdLaterThanFob' ? 'vddl'
+    : (po.exceptionAtStep === 4 && (po.exceptionKey === 'noVoyage' || po.exceptionKey === 'voyageTie')) ? 'customer'
+    : null;
+
+  const isDisplacementException =
+    po.exceptionAtStep === 3 ||
+    po.exceptionKey === 'noAllocation' ||
+    po.exceptionKey === 'noSpace';
 
   return (
     <>
@@ -134,17 +251,71 @@ export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lan
           {!isLive && !agentIntercept && po.status === 'MANUALLY_OVERRIDDEN' && (
             <ResultCardOverridden po={po} lang={lang} />
           )}
-          {!isLive && !agentIntercept && po.status === 'ON_HOLD' && <ResultCardOnHold po={po} lang={lang} />}
-          {!isLive && !agentIntercept && po.status === 'EXCEPTION' && <ResultCardException po={po} lang={lang} />}
+          {!isLive && !agentIntercept && po.status === 'ON_HOLD' && (
+            <ResultCardOnHold po={po} lang={lang} pendingAction={po.pendingAction} />
+          )}
+          {!isLive && !agentIntercept && po.status === 'EXCEPTION' && (
+            <>
+              <ResultCardException po={po} lang={lang} pendingAction={po.pendingAction} />
+              {isDisplacementException && !showDisplacement && !po.pendingAction && (
+                <motion.div className="mt-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <button
+                    onClick={() => setShowDisplacement(true)}
+                    className="w-full py-2 text-xs font-medium border border-dashed border-[#FED8C0] text-[#E8650A] rounded-lg hover:bg-[#FEF1E7] transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                      <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                    </svg>
+                    Displace a LOT to free up allocation
+                  </button>
+                </motion.div>
+              )}
+              {isDisplacementException && showDisplacement && onDisplace && (
+                <DisplacementPanel
+                  po={po}
+                  candidatePOs={displacementCandidates}
+                  lang={lang}
+                  onConfirm={(displaced) => {
+                    onDisplace(po, displaced);
+                    setShowDisplacement(false);
+                  }}
+                  onCancel={() => setShowDisplacement(false)}
+                />
+              )}
+            </>
+          )}
         </div>
 
-        <div className="px-6 py-3 border-t border-[#DEE5EC] bg-white flex-shrink-0 flex gap-2 justify-end">
+        <div className="px-6 py-3 border-t border-[#DEE5EC] bg-white flex-shrink-0 flex gap-2 justify-end flex-wrap">
           {po.status === 'EXCEPTION' && onGoToException && (
             <button
               onClick={onGoToException}
               className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors"
             >
               Resolve
+            </button>
+          )}
+          {/* Email action buttons */}
+          {availableEmailAction && !po.pendingAction && (
+            <button
+              onClick={() => setEmailAction(availableEmailAction)}
+              className="px-3 py-1.5 text-xs font-medium rounded flex items-center gap-1.5 transition-colors border"
+              style={
+                availableEmailAction === 'owim'
+                  ? { borderColor: '#93C5FD', color: '#1D4ED8', background: '#EFF6FF' }
+                  : availableEmailAction === 'vddl'
+                  ? { borderColor: '#FCD34D', color: '#92400E', background: '#FFFBEB' }
+                  : { borderColor: '#6EE7B7', color: '#065F46', background: '#ECFDF5' }
+              }
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+              {availableEmailAction === 'owim' ? 'Send to OWIM'
+                : availableEmailAction === 'vddl' ? 'Send to VDDL'
+                : 'Send to Customer'}
             </button>
           )}
           {(po.status === 'EXCEPTION' || po.status === 'ON_HOLD') && (
@@ -184,6 +355,27 @@ export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lan
           </button>
         </div>
       </motion.div>
+
+      {/* Email Compose Modal */}
+      {emailContent && (
+        <EmailModal
+          open={emailAction !== null}
+          onClose={() => setEmailAction(null)}
+          title={
+            emailAction === 'owim' ? 'Send to OWIM — Early Shipment Request'
+            : emailAction === 'vddl' ? 'Send to VDDL Team'
+            : 'Send to Customer — Sailing / Re-route Options'
+          }
+          defaultTo={emailContent.defaultTo}
+          defaultSubject={emailContent.subject}
+          defaultBody={emailContent.body}
+          readOnlyRows={emailContent.readOnlyRows}
+          onSend={({ to }) => {
+            setEmailAction(null);
+            onEmailSent?.(po.id, emailAction!, to);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -221,9 +413,9 @@ function ResultCardAssigned({ po, lang }: { po: PO; lang: Lang }) {
   );
 }
 
-function ResultCardOnHold({ po, lang }: { po: PO; lang: Lang }) {
+function ResultCardOnHold({ po, lang, pendingAction }: { po: PO; lang: Lang; pendingAction?: string }) {
   return (
-    <motion.div 
+    <motion.div
       className="bg-[#FEF1E7] border border-[#FED8C0] rounded-lg p-4 mt-5"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -231,6 +423,11 @@ function ResultCardOnHold({ po, lang }: { po: PO; lang: Lang }) {
       <div className="flex items-center gap-2 mb-3">
         <IconAlert />
         <h4 className="text-sm font-bold text-[#FE5000]">{t(lang, 'result.onHoldTitle')}</h4>
+        {pendingAction && (
+          <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#DBEAFE] text-[#1D4ED8]">
+            ✉ Awaiting OWIM
+          </span>
+        )}
       </div>
       <div className="text-xs text-[#0F1E2E] leading-relaxed">
         {t(lang, 'onHoldReasons.' + (po.onHoldKey || 'crdLater'))}
@@ -239,9 +436,14 @@ function ResultCardOnHold({ po, lang }: { po: PO; lang: Lang }) {
   );
 }
 
-function ResultCardException({ po, lang }: { po: PO; lang: Lang }) {
+function ResultCardException({ po, lang, pendingAction }: { po: PO; lang: Lang; pendingAction?: string }) {
+  const pendingLabel =
+    pendingAction === 'vddl' ? '✉ VDDL Submitted'
+    : pendingAction === 'customer' ? '✉ Pending Customer'
+    : null;
+
   return (
-    <motion.div 
+    <motion.div
       className="bg-[#fef2f2] border border-[#fecaca] rounded-lg p-4 mt-5"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -249,6 +451,11 @@ function ResultCardException({ po, lang }: { po: PO; lang: Lang }) {
       <div className="flex items-center gap-2 mb-3">
         <IconAlert />
         <h4 className="text-sm font-bold text-[#dc2626]">{t(lang, 'result.exceptionTitle')}</h4>
+        {pendingLabel && (
+          <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#D1FAE5] text-[#065F46]">
+            {pendingLabel}
+          </span>
+        )}
       </div>
       <div className="text-xs text-[#0F1E2E] leading-relaxed">
         <strong>{t(lang, 'result.failedAtStep', { n: po.exceptionAtStep || 1 })}</strong>

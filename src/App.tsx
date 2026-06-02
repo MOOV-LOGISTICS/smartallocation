@@ -177,6 +177,7 @@ export interface PO {
   polRegion?: string;
   podRegion?: string;
   preassignSnapshot?: PreassignSnapshot;
+  pendingAction?: string;
 }
 
 export interface Toast {
@@ -378,6 +379,52 @@ function App() {
     showToast(`${overridden.moovRef || overridden.lot} booking manually overridden by z.dorothy`, 'warning');
   };
 
+
+  const handleEmailSent = (poId: number, action: string, recipient: string) => {
+    setPos(prev => prev.map(p => p.id === poId ? { ...p, pendingAction: action } : p));
+    setDrawerPo(prev => prev?.id === poId ? { ...prev, pendingAction: action } : prev);
+    const label = recipient.length > 30 ? recipient.slice(0, 30) + '…' : recipient;
+    showToast(`✅ Email sent to ${label}`, 'success');
+  };
+
+  const handleDisplace = (targetPo: PO, displacedPo: PO) => {
+    const assignedTarget: PO = {
+      ...targetPo,
+      status: 'ASSIGNED',
+      carrier: displacedPo.carrier,
+      service: displacedPo.service,
+      vessel: displacedPo.vessel,
+      voyage: displacedPo.voyage,
+      etd: displacedPo.etd,
+      eta: displacedPo.eta,
+      peta: displacedPo.peta,
+      exceptionAtStep: undefined,
+      exceptionKey: undefined,
+      onHoldKey: undefined,
+      pendingAction: undefined,
+    };
+    const resetDisplaced: PO = {
+      ...displacedPo,
+      status: 'NOT_STARTED',
+      carrier: undefined,
+      service: undefined,
+      vessel: undefined,
+      voyage: undefined,
+      etd: undefined,
+      eta: undefined,
+      peta: undefined,
+      priority: undefined,
+    };
+    setPos(prev => prev.map(p =>
+      p.id === targetPo.id ? assignedTarget :
+      p.id === displacedPo.id ? resetDisplaced : p
+    ));
+    setDrawerPo(assignedTarget);
+    showToast(
+      `✅ ${targetPo.moovRef || targetPo.lot} allocated · ${displacedPo.moovRef || displacedPo.lot} reset to NOT_STARTED`,
+      'warning'
+    );
+  };
 
   const handleBatchRun = () => {
     const targets = selectedIds.size > 0
@@ -736,6 +783,9 @@ function App() {
         allocationUsage={allocationUsage}
         initialAllocation={INITIAL_ALLOCATION}
         onOverride={handleOverride}
+        allPOs={pos}
+        onEmailSent={handleEmailSent}
+        onDisplace={handleDisplace}
         agentIntercept={interceptModal ? {
           type: interceptModal.type,
           po: interceptModal.po,
