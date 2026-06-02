@@ -148,40 +148,16 @@ export function BookingDrawer({ po, open, onClose, runningStep, isLiveRun, onRer
                 <BookingTraceStep key={entry.step} entry={entry} currentStep={isLive ? runningStep : null} lang={lang} />
               ))}
 
-              {!isLive && po.status === 'BOOKED_EXACT' && (
-                <>
-                  <ResultCardBooked po={po} exact lang={lang} />
-                  {showOverride && onOverride && (
-                    <OverridePanel po={po} lang={lang}
-                      onConfirm={(data) => { onOverride(data); setShowOverride(false); }}
-                      onCancel={() => setShowOverride(false)}
-                    />
-                  )}
-                </>
+              {!isLive && po.status === 'BOOKED_EXACT' && <ResultCardBooked po={po} exact lang={lang} />}
+              {!isLive && po.status === 'BOOKED_UPDATED' && <ResultCardBooked po={po} exact={false} lang={lang} />}
+              {!isLive && po.status === 'ASSIGNED' && <ResultCardBooked po={po} exact={false} lang={lang} />}
+              {/* Override panel & MANUALLY_OVERRIDDEN card hidden — override feature deferred
+              {showOverride && onOverride && (
+                <OverridePanel po={po} lang={lang}
+                  onConfirm={(data) => { onOverride(data); setShowOverride(false); }}
+                  onCancel={() => setShowOverride(false)} />
               )}
-              {!isLive && po.status === 'BOOKED_UPDATED' && (
-                <>
-                  <ResultCardBooked po={po} exact={false} lang={lang} />
-                  {showOverride && onOverride && (
-                    <OverridePanel po={po} lang={lang}
-                      onConfirm={(data) => { onOverride(data); setShowOverride(false); }}
-                      onCancel={() => setShowOverride(false)}
-                    />
-                  )}
-                </>
-              )}
-              {!isLive && po.status === 'ASSIGNED' && (
-                <>
-                  <ResultCardBooked po={po} exact={false} lang={lang} />
-                  {showOverride && onOverride && (
-                    <OverridePanel po={po} lang={lang}
-                      onConfirm={(data) => { onOverride(data); setShowOverride(false); }}
-                      onCancel={() => setShowOverride(false)}
-                    />
-                  )}
-                </>
-              )}
-              {!isLive && po.status === 'MANUALLY_OVERRIDDEN' && <ResultCardBookingOverridden po={po} />}
+              {!isLive && po.status === 'MANUALLY_OVERRIDDEN' && <ResultCardBookingOverridden po={po} />} */}
               {!isLive && po.status === 'ON_HOLD' && <ResultCardOnHold po={po} lang={lang} />}
               {!isLive && po.status === 'EXCEPTION' && <ResultCardException po={po} lang={lang} />}
             </>
@@ -206,25 +182,22 @@ export function BookingDrawer({ po, open, onClose, runningStep, isLiveRun, onRer
               Run Booking
             </button>
           )}
+          {/* Override & Re-run AI Booking buttons hidden — override feature deferred
           {(po.status === 'BOOKED_EXACT' || po.status === 'BOOKED_UPDATED' || po.status === 'ASSIGNED') && !showOverride && onOverride && (
-            <button
-              onClick={() => setShowOverride(true)}
-              className="px-3 py-1.5 text-xs font-medium border border-[#E9D5FF] text-[#6D28D9] rounded hover:bg-[#F5F3FF] transition-colors flex items-center gap-1"
-            >
+            <button onClick={() => setShowOverride(true)}
+              className="px-3 py-1.5 text-xs font-medium border border-[#E9D5FF] text-[#6D28D9] rounded hover:bg-[#F5F3FF] transition-colors flex items-center gap-1">
               <IconEdit /> Override
             </button>
           )}
           {po.status === 'MANUALLY_OVERRIDDEN' && (
-            <button
-              onClick={() => { setShowOverride(false); onRerun(); }}
-              className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors flex items-center gap-1"
-            >
+            <button onClick={() => { setShowOverride(false); onRerun(); }}
+              className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors flex items-center gap-1">
               <IconRefresh /> Re-run AI Booking
             </button>
-          )}
+          )} */}
           {(po.status === 'BOOKED_EXACT' || po.status === 'BOOKED_UPDATED' || po.status === 'ASSIGNED') && (
             <button
-              onClick={() => { setShowOverride(false); onRerun(); }}
+              onClick={onRerun}
               className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors flex items-center gap-1"
             >
               <IconRefresh /> Re-run

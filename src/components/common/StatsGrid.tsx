@@ -22,22 +22,16 @@ const STAT_DEFS = [
   { tone: 'assigned', countKey: 'assigned', activeFilter: 'ASSIGNED' },
   { tone: 'on_hold', countKey: 'on_hold', activeFilter: 'ON_HOLD' },
   { tone: 'exception', countKey: 'exception', activeFilter: 'EXCEPTION' },
-  { tone: 'overridden', countKey: 'overridden', activeFilter: 'MANUALLY_OVERRIDDEN' }
+  // { tone: 'overridden', countKey: 'overridden', activeFilter: 'MANUALLY_OVERRIDDEN' },  // override hidden
 ] as const;
 
 export function StatsGrid({ lang, counts, filter, setFilter, isBooking }: StatsGridProps) {
-  const overrideTotal = counts.assigned + counts.overridden;
-  const overrideRate = overrideTotal > 0 ? Math.round((counts.overridden / overrideTotal) * 100) : 0;
-
   return (
-    <div className="stats-grid">
+    <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
       {STAT_DEFS.map(s => {
-        const isOverridden = s.tone === 'overridden';
         const trendKey = (isBooking ? 'bookingStats.trend.' : 'stats.trend.') + s.tone;
-        const mainValue = isOverridden ? `${overrideRate}%` : counts[s.countKey];
-        const trendText = isOverridden
-          ? t(lang, trendKey, { count: counts.overridden, total: overrideTotal })
-          : t(lang, trendKey);
+        const mainValue = counts[s.countKey as keyof typeof counts];
+        const trendText = t(lang, trendKey);
         return (
           <div
             key={s.tone}

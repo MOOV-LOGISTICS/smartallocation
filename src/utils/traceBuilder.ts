@@ -1,6 +1,6 @@
 import { PO, Lang } from '../App';
 import { t } from '../i18n';
-import { EARLY_SHIPMENT_LOTS, BOOKING_MATRIX, FND_RULES } from '../data/referenceData';
+import { EARLY_SHIPMENT_LOTS, BOOKING_MATRIX, FND_RULES, VESSEL_SCHEDULES } from '../data/referenceData';
 
 export interface TraceEntry {
   step: number;
@@ -155,6 +155,23 @@ export function buildTraceLog(
   // Voyage info for step 4/5
   const isTie      = po.exceptionKey === 'voyageTie';
   const isNoVoyage = po.exceptionKey === 'noVoyage';
+
+  // For noVoyage: find vessels in ETD window WITHOUT the ETA≤LDD filter
+  // to surface why they were rejected (ETA/PETA exceeds LDD)
+  const rejectedVessels = (() => {
+    if (!isNoVoyage || !po.crd) return [];
+    const carrierCodes = new Set(laneEntries.map(e => {
+      const code = CARRIER_DISPLAY_TO_CODE[e.carrier];
+      return code || e.carrier;
+    }));
+    return VESSEL_SCHEDULES.filter(v =>
+      v.polCode === po.pol &&
+      v.podCode === po.pod &&
+      carrierCodes.has(v.carrierCode) &&
+      v.etd >= etdEarlyDate &&
+      v.etd <= etdLateDate
+    ).slice(0, 3); // show up to 3 candidates
+  })();
   const voyagesFound = isNoVoyage
     ? `none — no vessel scheduled on ${lane} within ETD window`
     : isTie
@@ -327,6 +344,8 @@ export function buildTraceLog(
         ? r('skipped')
         : s4Pass
           ? r('s4Pass')
+          : isNoVoyage && rejectedVessels.length > 0
+            ? `${rejectedVessels.length} vessel(s) found on ${lane} within ETD window [${etdEarlyDate} → ${etdLateDate}] but all ETA/PETA exceed LDD (${po.ldd}).`
           : isNoVoyage
             ? r('s4FailNoVoyage', { lane, start: etdEarlyDate, end: etdLateDate })
             : isTie
@@ -338,7 +357,7 @@ export function buildTraceLog(
         'CRD': po.crd || '—',
         'ETD': s4Pass ? (po.etd || etdEarlyDate) : `${etdEarlyDate} ~ ${etdLateDate}`,
         'ETA': s4Pass ? (po.eta || '—') : '—',
-        'PETA': po.peta || '—',
+        'PETA': s4Pass ? (po.peta || '—') : '—',
         'LDD (ETA & PETA must ≤)': po.ldd,
         'Sort Rules': 'Priority asc → ETA asc → ETD desc',
       },
@@ -349,6 +368,14 @@ export function buildTraceLog(
             'ETD / ETA': `${po.etd || ''} / ${po.eta || ''}`,
             'FND': fndResult,
           }
+        : isNoVoyage && rejectedVessels.length > 0
+          ? {
+              'Vessels Found': String(rejectedVessels.length) + ' (all ETA/PETA > LDD)',
+              ...Object.fromEntries(rejectedVessels.map((v, i) =>
+                [`Vessel ${i + 1}`, `${v.vessel} / ${v.voyage} — ETD ${v.etd}  ETA ${v.eta}  PETA ${v.peta || '—'}  ✗ ETA > LDD`]
+              )),
+              'Result': `EXCEPTION — ${rejectedVessels.length} vessel(s) found but all ETA/PETA exceed LDD ${po.ldd}`,
+            }
         : isNoVoyage
           ? { 'Vessels Found': '0', 'Result': `EXCEPTION — no vessel on ${lane} in window ${etdEarlyDate} → ${etdLateDate}` }
           : isTie

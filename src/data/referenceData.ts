@@ -291,6 +291,8 @@ export const VESSEL_SCHEDULES: VesselSchedule[] = [
   { carrierCode: 'CMDU', carrier: 'CMA CGM',     vessel: 'CMA CGM TROCADERO',   voyage: '0FF2PE3MA', polCode: 'CNNBO', podCode: 'ESBCN', service: 'MEX',   etd: '2026-06-15', eta: '2026-07-23', peta: '2026-07-25', availableTeu: 20, priority: 1 },
   { carrierCode: 'CMDU', carrier: 'CMA CGM',     vessel: 'CMA CGM LOUVRE',      voyage: '0FF3PE2MA', polCode: 'CNNBO', podCode: 'ESBCN', service: 'MEX',   etd: '2026-06-28', eta: '2026-08-05', peta: '2026-08-07', availableTeu: 18, priority: 1 },
   { carrierCode: 'CMDU', carrier: 'CMA CGM',     vessel: 'CMA CGM BELEM',       voyage: '0FG4PE1MA', polCode: 'CNNBO', podCode: 'ESBCN', service: 'MEX',   etd: '2026-07-26', eta: '2026-09-02', peta: '2026-09-04', availableTeu: 16, priority: 1 },
+  { carrierCode: 'HLCU', carrier: 'Hapag-Lloyd', vessel: 'TRITON',              voyage: 'TT834W',    polCode: 'CNNBO', podCode: 'ESBCN', service: 'SE2',   etd: '2026-08-16', eta: '2026-10-08', peta: '2026-10-10', availableTeu: 14, priority: 2 },
+  { carrierCode: 'MSCU', carrier: 'MSC',         vessel: 'MSC BEATRICE',        voyage: 'FB834R',    polCode: 'CNNBO', podCode: 'ESBCN', service: 'LYNX',  etd: '2026-08-20', eta: '2026-10-12', peta: '2026-10-14', availableTeu: 12, priority: 3 },
 
   // ── CNYTN → SIKOP ────────────────────────────────────────────────────────
   { carrierCode: 'CMDU', carrier: 'CMA CGM',     vessel: 'CMA CGM NERVAL',      voyage: '0FG5PE1MA', polCode: 'CNYTN', podCode: 'SIKOP', service: 'BEX2',  etd: '2026-07-02', eta: '2026-08-09', peta: '2026-08-11', availableTeu: 18, priority: 1 },

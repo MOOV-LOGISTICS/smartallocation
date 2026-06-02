@@ -387,6 +387,14 @@ function App() {
     showToast(`✅ Email sent to ${label}`, 'success');
   };
 
+  const handleRerunWithNewCrd = (newCrd: string) => {
+    if (!drawerPo) return;
+    const newCrdWeek = etdToAllocWeek(newCrd);
+    const modifiedPo = { ...drawerPo, crd: newCrd, crdWeek: newCrdWeek, exceptionAtStep: undefined, exceptionKey: undefined, onHoldKey: undefined };
+    setPos(prev => prev.map(p => p.id === modifiedPo.id ? modifiedPo : p));
+    runPreAssignLive(modifiedPo);
+  };
+
   const handleDisplace = (targetPo: PO, displacedPo: PO) => {
     const assignedTarget: PO = {
       ...targetPo,
@@ -786,6 +794,7 @@ function App() {
         allPOs={pos}
         onEmailSent={handleEmailSent}
         onDisplace={handleDisplace}
+        onRerunWithNewCrd={handleRerunWithNewCrd}
         agentIntercept={interceptModal ? {
           type: interceptModal.type,
           po: interceptModal.po,

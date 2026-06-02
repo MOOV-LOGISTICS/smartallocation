@@ -5,7 +5,7 @@ import { t } from '../../i18n';
 import { buildTraceLog, TraceEntry } from '../../utils/traceBuilder';
 import { StatusPill } from '../common/StatusPill';
 import { TraceStep } from './TraceStep';
-import { AgentPrompt } from './AgentPrompt';
+import { AgentPrompt, StaticAgentAction } from './AgentPrompt';
 import { OverridePanel } from './OverridePanel';
 import { DisplacementPanel } from './DisplacementPanel';
 import { IconClose, IconRefresh, IconSparkle, IconAlert, IconEdit } from '../icons/index';
@@ -35,10 +35,11 @@ interface DrawerProps {
   allPOs?: PO[];
   onEmailSent?: (poId: number, action: string, recipient: string) => void;
   onDisplace?: (targetPo: PO, displacedPo: PO) => void;
+  onRerunWithNewCrd?: (newCrd: string) => void;
 }
 
 
-export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException, allocationUsage, initialAllocation, agentIntercept, onOverride, allPOs = [], onEmailSent, onDisplace }: DrawerProps) {
+export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException, allocationUsage, initialAllocation, agentIntercept, onOverride, allPOs = [], onEmailSent, onDisplace, onRerunWithNewCrd }: DrawerProps) {
   const trace = useMemo(() => po ? buildTraceLog(po, lang, allocationUsage, initialAllocation) : [], [po, lang, allocationUsage, initialAllocation]);
   const isLive = isLiveRun && runningStep !== null;
   const [showOverride, setShowOverride] = useState(false);
@@ -129,9 +130,21 @@ export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lan
             />
           </div>
 
-          {(agentIntercept ? trace.slice(0, 1) : trace).map((entry) => (
-            <TraceStep key={entry.step} entry={entry} currentStep={isLive ? runningStep : null} lang={lang} />
-          ))}
+          {(() => {
+            const steps = agentIntercept ? trace.slice(0, 1) : trace;
+            // For static (non-live) exceptions/holds, insert agent bubble after the failing step
+            const staticFailStep = (!isLive && !agentIntercept && (po.status === 'EXCEPTION' || po.status === 'ON_HOLD'))
+              ? (po.status === 'ON_HOLD' ? 1 : (po.exceptionAtStep ?? 1))
+              : null;
+            return steps.map((entry) => (
+              <React.Fragment key={entry.step}>
+                <TraceStep entry={entry} currentStep={isLive ? runningStep : null} lang={lang} />
+                {staticFailStep === entry.step && (
+                  <StaticAgentAction po={po} lang={lang} onEmailSent={onEmailSent} onRerunWithNewCrd={onRerunWithNewCrd} />
+                )}
+              </React.Fragment>
+            ));
+          })()}
 
           {agentIntercept && (
             <AgentPrompt
@@ -146,21 +159,17 @@ export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lan
           )}
 
           {!isLive && !agentIntercept && po.status === 'ASSIGNED' && (
-            <>
-              <ResultCardAssigned po={po} lang={lang} />
-              {showOverride && onOverride && (
-                <OverridePanel
-                  po={po}
-                  lang={lang}
-                  onConfirm={(data) => { onOverride(data); setShowOverride(false); }}
-                  onCancel={() => setShowOverride(false)}
-                />
-              )}
-            </>
+            <ResultCardAssigned po={po} lang={lang} />
+          )}
+          {/* Override panel hidden — feature deferred
+          {!isLive && !agentIntercept && po.status === 'ASSIGNED' && showOverride && onOverride && (
+            <OverridePanel po={po} lang={lang}
+              onConfirm={(data) => { onOverride(data); setShowOverride(false); }}
+              onCancel={() => setShowOverride(false)} />
           )}
           {!isLive && !agentIntercept && po.status === 'MANUALLY_OVERRIDDEN' && (
             <ResultCardOverridden po={po} lang={lang} />
-          )}
+          )} */}
           {!isLive && !agentIntercept && po.status === 'ON_HOLD' && (
             <ResultCardOnHold po={po} lang={lang} pendingAction={po.pendingAction} />
           )}
@@ -214,30 +223,27 @@ export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lan
               <IconRefresh /> Re-run
             </button>
           )}
-          {po.status === 'ASSIGNED' && !showOverride && onOverride && (
-            <button
-              onClick={() => setShowOverride(true)}
-              className="px-3 py-1.5 text-xs font-medium border border-[#E9D5FF] text-[#6D28D9] rounded hover:bg-[#F5F3FF] transition-colors flex items-center gap-1"
-            >
-              <IconEdit /> Override
-            </button>
-          )}
           {po.status === 'ASSIGNED' && (
             <button
-              onClick={() => { setShowOverride(false); onRerun(); }}
+              onClick={onRerun}
               className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors flex items-center gap-1"
             >
               <IconRefresh /> {t(lang, 'btn.rerun')}
             </button>
           )}
-          {po.status === 'MANUALLY_OVERRIDDEN' && (
-            <button
-              onClick={onRerun}
-              className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors flex items-center gap-1"
-            >
-              <IconRefresh /> Re-run AI
+          {/* Override & Re-run AI buttons hidden — override feature deferred
+          {po.status === 'ASSIGNED' && !showOverride && onOverride && (
+            <button onClick={() => setShowOverride(true)}
+              className="px-3 py-1.5 text-xs font-medium border border-[#E9D5FF] text-[#6D28D9] rounded hover:bg-[#F5F3FF] transition-colors flex items-center gap-1">
+              <IconEdit /> Override
             </button>
           )}
+          {po.status === 'MANUALLY_OVERRIDDEN' && (
+            <button onClick={onRerun}
+              className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors flex items-center gap-1">
+              <IconRefresh /> Re-run AI
+            </button>
+          )} */}
           <button onClick={onClose} className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors">
             {t(lang, 'btn.close')}
           </button>
