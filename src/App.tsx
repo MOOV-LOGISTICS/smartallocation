@@ -810,6 +810,7 @@ function App() {
             setInterceptModal(null);
             closeDrawer();
           },
+          onEmailSent: handleEmailSent,
         } : null}
       />
       <ResolveModal
