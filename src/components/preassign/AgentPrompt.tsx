@@ -320,7 +320,7 @@ export function AgentPrompt({ type, po, lang, onModifyAndRun, onProceedAsIs, onC
                 </div>
               ) : (
                 <InlineEmailComposer
-                  defaultTo="OWIM_Ware_Zulauf@lidl.com"
+                  defaultTo=""
                   defaultSubject={`Early Shipment Approval Request – ${lot} Batch ${po.batch}`}
                   defaultBody={buildOwimEmailBody(po)}
                   onSend={(to) => {
