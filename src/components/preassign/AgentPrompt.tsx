@@ -234,6 +234,7 @@ export function AgentPrompt({ type, po, lang, onModifyAndRun, onProceedAsIs, onC
                     </label>
                     <input
                       type="date"
+                      lang="en"
                       value={newCrd}
                       max={fobMonday}
                       onChange={e => setNewCrd(e.target.value)}
@@ -436,6 +437,7 @@ export function StaticAgentAction({ po, lang, onEmailSent, onRerunWithNewCrd }: 
                     </label>
                     <input
                       type="date"
+                      lang="en"
                       value={newCrd}
                       max={fobMonday}
                       onChange={e => setNewCrd(e.target.value)}
