@@ -4,6 +4,7 @@ import { PageHeader } from './components/common/PageHeader';
 import { StatsGrid } from './components/common/StatsGrid';
 import { BookingStatsGrid } from './components/common/BookingStatsGrid';
 import { Toolbar } from './components/common/Toolbar';
+import { ViewTabs } from './components/common/ViewTabs';
 import { POTable } from './components/preassign/POTable';
 import { Drawer } from './components/preassign/Drawer';
 import { BookingTable } from './components/carrierbooking/BookingTable';
@@ -267,6 +268,8 @@ function App() {
       return raw ? JSON.parse(raw) : [];
     } catch { return []; }
   });
+  // Which saved-view tab is active; null = All LOTs (pristine) or an unsaved custom state
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [drawerPo, setDrawerPo] = useState<PO | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -336,6 +339,17 @@ function App() {
     setFilter(f);
     setSubFilter(sub);
     setSelectedIds(new Set()); // selection semantics differ per tab (run vs send)
+    setActiveViewId(null);     // manual change leaves the saved-view state
+  };
+
+  const changeSubFilter = (s: string) => {
+    setSubFilter(s);
+    setActiveViewId(null);
+  };
+
+  const updateAttributeFilters = (f: AttributeFilters) => {
+    setAttributeFilters(f);
+    setActiveViewId(null);
   };
 
   // Distinct values across all LOTs, used to populate the attribute filter panel
@@ -361,6 +375,7 @@ function App() {
       createdAt: new Date().toISOString(),
     };
     setSavedViews(prev => [...prev, view]);
+    setActiveViewId(view.id); // saving lands the user on the new view tab
     showToast(t(lang, 'views.saved', { name }), 'success');
   };
 
@@ -369,11 +384,24 @@ function App() {
     setSubFilter(view.subFilter);
     setAttributeFilters(view.attributeFilters);
     setSelectedIds(new Set());
+    setActiveViewId(view.id);
   };
 
   const deleteSavedView = (id: string) => {
     setSavedViews(prev => prev.filter(v => v.id !== id));
+    if (activeViewId === id) resetToAllView();
   };
+
+  // "All LOTs" tab: pristine state, no filters of any kind
+  const resetToAllView = () => {
+    setFilter('ALL');
+    setSubFilter('ALL');
+    setAttributeFilters(EMPTY_ATTRIBUTE_FILTERS);
+    setSelectedIds(new Set());
+    setActiveViewId(null);
+  };
+
+  const isPristine = filter === 'ALL' && subFilter === 'ALL' && isAttributeFiltersEmpty(attributeFilters);
 
   const filtered = useMemo(() => {
     let list = pos;
@@ -946,6 +974,17 @@ function App() {
               subFilter={subFilter}
               setFilter={changeFilter}
             />
+            <ViewTabs
+              lang={lang}
+              savedViews={savedViews}
+              activeViewId={activeViewId}
+              allActive={activeViewId === null && isPristine}
+              canSave={!isPristine}
+              onSelectAll={resetToAllView}
+              onSelectView={applySavedView}
+              onDeleteView={deleteSavedView}
+              onSaveView={saveCurrentAsView}
+            />
             <Toolbar
               lang={lang}
               searchQuery={searchQuery}
@@ -953,7 +992,7 @@ function App() {
               filter={filter}
               setFilter={changeFilter}
               subFilter={subFilter}
-              setSubFilter={setSubFilter}
+              setSubFilter={changeSubFilter}
               subCounts={subCounts}
               selectedIds={selectedIds}
               batchRunning={batchRunning}
@@ -962,12 +1001,8 @@ function App() {
               handleBatchResolve={() => setBatchResolveOpen(true)}
               handleBatchRerun={handleBatchRerun}
               attributeFilters={attributeFilters}
-              setAttributeFilters={setAttributeFilters}
+              setAttributeFilters={updateAttributeFilters}
               fieldOptions={fieldOptions}
-              savedViews={savedViews}
-              onSaveView={saveCurrentAsView}
-              onApplyView={applySavedView}
-              onDeleteView={deleteSavedView}
             />
             <POTable
               lang={lang}
