@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TopNav } from './components/common/TopNav';
 import { PageHeader } from './components/common/PageHeader';
 import { StatsGrid } from './components/common/StatsGrid';
@@ -132,6 +132,46 @@ export interface ResolutionNote {
   resolvedAt: string;
 }
 
+export interface AttributeFilters {
+  carriers: string[];
+  pols: string[];
+  pods: string[];
+  vessels: string[];
+  suppliers: string[];
+  teuMin?: number;
+  teuMax?: number;
+}
+
+export interface SavedView {
+  id: string;
+  name: string;
+  filter: string;
+  subFilter: string;
+  attributeFilters: AttributeFilters;
+  createdAt: string;
+}
+
+export const EMPTY_ATTRIBUTE_FILTERS: AttributeFilters = { carriers: [], pols: [], pods: [], vessels: [], suppliers: [] };
+
+export function isAttributeFiltersEmpty(f: AttributeFilters): boolean {
+  return f.carriers.length === 0 && f.pols.length === 0 && f.pods.length === 0 &&
+    f.vessels.length === 0 && f.suppliers.length === 0 &&
+    f.teuMin === undefined && f.teuMax === undefined;
+}
+
+export function matchAttributeFilters(po: PO, f: AttributeFilters): boolean {
+  if (f.carriers.length && !(po.carrier && f.carriers.includes(po.carrier))) return false;
+  if (f.pols.length && !f.pols.includes(po.pol)) return false;
+  if (f.pods.length && !f.pods.includes(po.pod)) return false;
+  if (f.vessels.length && !(po.vessel && f.vessels.includes(po.vessel))) return false;
+  if (f.suppliers.length && !(po.supplier && f.suppliers.includes(po.supplier))) return false;
+  if (f.teuMin !== undefined && po.teu < f.teuMin) return false;
+  if (f.teuMax !== undefined && po.teu > f.teuMax) return false;
+  return true;
+}
+
+const SAVED_VIEWS_STORAGE_KEY = 'smartAllocation.savedViews.preassign';
+
 export interface PreassignSnapshot {
   executedAt: string;
   carrier: string;
@@ -220,6 +260,13 @@ function App() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [filter, setFilter] = useState<string>('ALL');
   const [subFilter, setSubFilter] = useState<string>('ALL');
+  const [attributeFilters, setAttributeFilters] = useState<AttributeFilters>(EMPTY_ATTRIBUTE_FILTERS);
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => {
+    try {
+      const raw = localStorage.getItem(SAVED_VIEWS_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [drawerPo, setDrawerPo] = useState<PO | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -291,6 +338,43 @@ function App() {
     setSelectedIds(new Set()); // selection semantics differ per tab (run vs send)
   };
 
+  // Distinct values across all LOTs, used to populate the attribute filter panel
+  const fieldOptions = useMemo(() => ({
+    carriers: Array.from(new Set(pos.map(p => p.carrier).filter(Boolean))).sort() as string[],
+    pols: Array.from(new Set(pos.map(p => p.pol).filter(Boolean))).sort() as string[],
+    pods: Array.from(new Set(pos.map(p => p.pod).filter(Boolean))).sort() as string[],
+    vessels: Array.from(new Set(pos.map(p => p.vessel).filter(Boolean))).sort() as string[],
+    suppliers: Array.from(new Set(pos.map(p => p.supplier).filter(Boolean))).sort() as string[],
+  }), [pos]);
+
+  useEffect(() => {
+    try { localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(savedViews)); } catch {}
+  }, [savedViews]);
+
+  const saveCurrentAsView = (name: string) => {
+    const view: SavedView = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      filter,
+      subFilter,
+      attributeFilters,
+      createdAt: new Date().toISOString(),
+    };
+    setSavedViews(prev => [...prev, view]);
+    showToast(t(lang, 'views.saved', { name }), 'success');
+  };
+
+  const applySavedView = (view: SavedView) => {
+    setFilter(view.filter);
+    setSubFilter(view.subFilter);
+    setAttributeFilters(view.attributeFilters);
+    setSelectedIds(new Set());
+  };
+
+  const deleteSavedView = (id: string) => {
+    setSavedViews(prev => prev.filter(v => v.id !== id));
+  };
+
   const filtered = useMemo(() => {
     let list = pos;
     if (filter === 'NEEDS_ACTION') {
@@ -300,6 +384,9 @@ function App() {
       list = list.filter(p => p.status === 'ASSIGNED' || p.status === 'MANUALLY_OVERRIDDEN');
     } else if (filter !== 'ALL') {
       list = list.filter(p => p.status === filter);
+    }
+    if (!isAttributeFiltersEmpty(attributeFilters)) {
+      list = list.filter(p => matchAttributeFilters(p, attributeFilters));
     }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -313,7 +400,7 @@ function App() {
       );
     }
     return list;
-  }, [pos, filter, subFilter, searchQuery]);
+  }, [pos, filter, subFilter, attributeFilters, searchQuery]);
 
   const showToast = (msg: string, kind?: string) => {
     const id = Date.now() + Math.random();
@@ -874,6 +961,13 @@ function App() {
               handleSendToSmartMoov={handleSendToSmartMoov}
               handleBatchResolve={() => setBatchResolveOpen(true)}
               handleBatchRerun={handleBatchRerun}
+              attributeFilters={attributeFilters}
+              setAttributeFilters={setAttributeFilters}
+              fieldOptions={fieldOptions}
+              savedViews={savedViews}
+              onSaveView={saveCurrentAsView}
+              onApplyView={applySavedView}
+              onDeleteView={deleteSavedView}
             />
             <POTable
               lang={lang}
