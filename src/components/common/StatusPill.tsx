@@ -6,6 +6,7 @@ const STATUS_TONE: Record<string, string> = {
   NOT_STARTED: 'pending',
   ON_HOLD: 'onhold',
   EXCEPTION: 'exception',
+  RESOLVED_PENDING_RERUN: 'resolved',
   RUNNING: 'running',
   CONFIRMED: 'confirmed',
   BOOKED_EXACT: 'booked-exact',

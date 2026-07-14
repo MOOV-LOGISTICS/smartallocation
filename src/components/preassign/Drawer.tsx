@@ -173,6 +173,9 @@ export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lan
           {!isLive && !agentIntercept && po.status === 'ON_HOLD' && (
             <ResultCardOnHold po={po} lang={lang} pendingAction={po.pendingAction} />
           )}
+          {!isLive && !agentIntercept && po.status === 'RESOLVED_PENDING_RERUN' && (
+            <ResultCardResolved po={po} />
+          )}
           {!isLive && !agentIntercept && po.status === 'EXCEPTION' && (
             <>
               <ResultCardException po={po} lang={lang} pendingAction={po.pendingAction} />
@@ -215,7 +218,7 @@ export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lan
               Resolve
             </button>
           )}
-          {(po.status === 'EXCEPTION' || po.status === 'ON_HOLD') && (
+          {(po.status === 'EXCEPTION' || po.status === 'ON_HOLD' || po.status === 'RESOLVED_PENDING_RERUN') && (
             <button
               onClick={onRerun}
               className="px-3 py-1.5 text-xs font-medium bg-[#004F7C] text-white rounded hover:bg-[#337296] transition-colors flex items-center gap-1"
@@ -335,6 +338,33 @@ function ResultCardException({ po, lang, pendingAction }: { po: PO; lang: Lang; 
         <strong>{t(lang, 'result.failedAtStep', { n: po.exceptionAtStep || 1 })}</strong>
         {t(lang, 'exceptionReasons.' + (po.exceptionKey || 'noSpace'))}
       </div>
+    </motion.div>
+  );
+}
+
+function ResultCardResolved({ po }: { po: PO }) {
+  const notes = [...(po.resolutionNotes || [])].reverse();
+  return (
+    <motion.div
+      className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg p-4 mt-5"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <IconRefresh />
+        <h4 className="text-sm font-bold text-[#1D4ED8]">Resolved · Ready to Re-run</h4>
+      </div>
+      {notes.map((n, i) => (
+        <div
+          key={i}
+          className="text-xs text-[#0F1E2E] leading-relaxed pb-2 mb-2 border-b border-[#DBEAFE] last:border-0 last:pb-0 last:mb-0"
+        >
+          <div className="text-[10px] text-[#60748A] mb-0.5">
+            {new Date(n.resolvedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </div>
+          {n.comment}
+        </div>
+      ))}
     </motion.div>
   );
 }

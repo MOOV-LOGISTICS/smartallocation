@@ -332,6 +332,59 @@ body { min-height: 100vh; overflow-x: hidden; }
 .selection-info { font-size: 12.5px; color: var(--text2); padding: 0 6px; font-weight: 500; }
 .selection-info b { color: var(--accent); }
 
+/* Needs Action count badge on toolbar tab */
+.filter-count-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--danger, #C0392B);
+  color: #fff;
+  line-height: 1.4;
+}
+.toolbar-filter button.active .filter-count-badge { background: rgba(255, 255, 255, 0.25); }
+
+/* Exception reason sub-filter, inline within the toolbar row */
+.subfilter-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.subfilter-label { font-size: 12px; font-weight: 600; color: var(--text2); margin-right: 2px; }
+.subfilter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+  transition: all 0.15s;
+}
+.subfilter-chip:hover:not(.active) { background: var(--bg3); color: var(--text); }
+.subfilter-chip.active { background: var(--accent); border-color: var(--accent); color: var(--white); }
+.subfilter-count {
+  display: inline-block;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  background: var(--bg3);
+  color: var(--text2);
+  line-height: 1.5;
+}
+.subfilter-chip.active .subfilter-count { background: rgba(255, 255, 255, 0.25); color: var(--white); }
+
 /* Buttons */
 .btn {
   padding: 10px 16px;
@@ -427,6 +480,10 @@ tbody tr:last-child td { border-bottom: none; }
 /* Exception - Red with pulse */
 .pill-exception { background: rgba(239, 68, 68, 0.12); color: #B91C1C; }
 .pill-exception .pill-dot { background: var(--danger); animation: pulse-dot 1.5s ease-in-out infinite; }
+
+/* Resolved (pending re-run) - Blue */
+.pill-resolved { background: rgba(59, 130, 246, 0.12); color: #1D4ED8; }
+.pill-resolved .pill-dot { background: var(--accent); }
 
 /* Confirmed - Teal with bold border */
 .pill-confirmed { background: rgba(16, 185, 129, 0.15); color: #047857; border-color: var(--teal); }
