@@ -14,6 +14,7 @@ import { ToastContainer } from './components/common/ToastContainer';
 import { AllocationManagement } from './components/allocation/AllocationManagement';
 import { ExceptionDashboard } from './components/exception/ExceptionDashboard';
 import { ResolveModal } from './components/exception/ResolveModal';
+import { BatchResolveModal } from './components/exception/BatchResolveModal';
 import { MOCK_POS, BOOKING_MOCK_POS, DEMO_ALLOCATION_USAGE } from './data/mockData';
 import { INITIAL_ALLOCATION, EARLY_SHIPMENT_LOTS, BOOKING_MATRIX, VESSEL_SCHEDULES, FND_RULES } from './data/referenceData';
 import { I18N, t } from './i18n';
@@ -124,7 +125,12 @@ function computeAssignment(po: PO): PO {
 import './styles/index.css';
 
 export type Lang = 'en' | 'zh' | 'de';
-export type POStatus = 'ASSIGNED' | 'NOT_STARTED' | 'ON_HOLD' | 'EXCEPTION' | 'RUNNING' | 'BOOKED_EXACT' | 'BOOKED_UPDATED' | 'MANUALLY_OVERRIDDEN';
+export type POStatus = 'ASSIGNED' | 'NOT_STARTED' | 'ON_HOLD' | 'EXCEPTION' | 'RESOLVED_PENDING_RERUN' | 'RUNNING' | 'BOOKED_EXACT' | 'BOOKED_UPDATED' | 'MANUALLY_OVERRIDDEN';
+
+export interface ResolutionNote {
+  comment: string;
+  resolvedAt: string;
+}
 
 export interface PreassignSnapshot {
   executedAt: string;
@@ -178,6 +184,8 @@ export interface PO {
   podRegion?: string;
   preassignSnapshot?: PreassignSnapshot;
   pendingAction?: string;
+  sentToSmartMoov?: boolean;
+  resolutionNotes?: ResolutionNote[];
 }
 
 export interface Toast {
@@ -185,6 +193,22 @@ export interface Toast {
   msg: string;
   kind?: string;
 }
+
+// Exception reason categories for the Needs Action sub-filter.
+// Categories other than SUPPLIER/RESOLVED only match still-open EXCEPTION rows —
+// once a LOT is marked resolved it moves to the RESOLVED bucket instead.
+export function matchExcCategory(po: PO, cat: string): boolean {
+  switch (cat) {
+    case 'SCHEDULE':  return po.status === 'EXCEPTION' && po.exceptionKey === 'crdLaterThanFob';
+    case 'NO_VESSEL': return po.status === 'EXCEPTION' && ['noCarrier', 'noVoyage', 'voyageTie', 'batchNoVoyage'].includes(po.exceptionKey || '');
+    case 'NO_SPACE':  return po.status === 'EXCEPTION' && ['noSpace', 'noAllocation'].includes(po.exceptionKey || '');
+    case 'SUPPLIER':  return po.status === 'ON_HOLD';
+    case 'RESOLVED':  return po.status === 'RESOLVED_PENDING_RERUN';
+    default: return true;
+  }
+}
+
+const NEEDS_ACTION_STATUSES = ['EXCEPTION', 'ON_HOLD', 'RESOLVED_PENDING_RERUN'];
 
 function App() {
   const [lang, setLang] = useState<Lang>('en');
@@ -195,6 +219,7 @@ function App() {
   const [pos, setPos] = useState<PO[]>(MOCK_POS);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [filter, setFilter] = useState<string>('ALL');
+  const [subFilter, setSubFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [drawerPo, setDrawerPo] = useState<PO | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -214,6 +239,7 @@ function App() {
   const [bookingPos, setBookingPos] = useState<PO[]>(BOOKING_MOCK_POS);
   const [bookingSelectedIds, setBookingSelectedIds] = useState<Set<number>>(new Set());
   const [bookingFilter, setBookingFilter] = useState<string>('ALL');
+  const [bookingSubFilter, setBookingSubFilter] = useState<string>('ALL');
   const [bookingSearchQuery, setBookingSearchQuery] = useState('');
   const [bookingDrawerPo, setBookingDrawerPo] = useState<PO | null>(null);
   const [bookingDrawerOpen, setBookingDrawerOpen] = useState(false);
@@ -242,12 +268,39 @@ function App() {
     assigned: pos.filter(p => p.status === 'ASSIGNED').length,
     overridden: pos.filter(p => p.status === 'MANUALLY_OVERRIDDEN').length,
     on_hold: pos.filter(p => p.status === 'ON_HOLD').length,
-    exception: pos.filter(p => p.status === 'EXCEPTION').length
+    exception: pos.filter(p => p.status === 'EXCEPTION').length,
+    needs_action: pos.filter(p => NEEDS_ACTION_STATUSES.includes(p.status)).length,
+    done: pos.filter(p => p.status === 'ASSIGNED' || p.status === 'MANUALLY_OVERRIDDEN').length
   }), [pos]);
+
+  const subCounts = useMemo(() => {
+    const na = pos.filter(p => NEEDS_ACTION_STATUSES.includes(p.status));
+    return {
+      ALL: na.length,
+      SCHEDULE: na.filter(p => matchExcCategory(p, 'SCHEDULE')).length,
+      NO_VESSEL: na.filter(p => matchExcCategory(p, 'NO_VESSEL')).length,
+      NO_SPACE: na.filter(p => matchExcCategory(p, 'NO_SPACE')).length,
+      SUPPLIER: na.filter(p => matchExcCategory(p, 'SUPPLIER')).length,
+      RESOLVED: na.filter(p => matchExcCategory(p, 'RESOLVED')).length,
+    };
+  }, [pos]);
+
+  const changeFilter = (f: string, sub: string = 'ALL') => {
+    setFilter(f);
+    setSubFilter(sub);
+    setSelectedIds(new Set()); // selection semantics differ per tab (run vs send)
+  };
 
   const filtered = useMemo(() => {
     let list = pos;
-    if (filter !== 'ALL') list = list.filter(p => p.status === filter);
+    if (filter === 'NEEDS_ACTION') {
+      list = list.filter(p => NEEDS_ACTION_STATUSES.includes(p.status));
+      if (subFilter !== 'ALL') list = list.filter(p => matchExcCategory(p, subFilter));
+    } else if (filter === 'DONE') {
+      list = list.filter(p => p.status === 'ASSIGNED' || p.status === 'MANUALLY_OVERRIDDEN');
+    } else if (filter !== 'ALL') {
+      list = list.filter(p => p.status === filter);
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       list = list.filter(p =>
@@ -260,7 +313,7 @@ function App() {
       );
     }
     return list;
-  }, [pos, filter, searchQuery]);
+  }, [pos, filter, subFilter, searchQuery]);
 
   const showToast = (msg: string, kind?: string) => {
     const id = Date.now() + Math.random();
@@ -511,13 +564,75 @@ function App() {
     });
   };
 
+  // Checkbox selection semantics differ per tab:
+  // - Completed: select assigned LOTs (for Send to SmartMOOV)
+  // - Needs Action, narrowed to one open reason (Schedule/No Vessel/No Space):
+  //   select still-open EXCEPTION rows in that category (for batch Resolve)
+  // - Needs Action, narrowed to Resolved: select resolved rows (for batch Re-run)
+  // - Needs Action with All Reasons / Awaiting Supplier: nothing selectable —
+  //   must narrow to a single reason first (On Hold batch flow deferred)
+  // - everywhere else: select not-started LOTs (for batch run)
+  const isPoSelectable = (po: PO): boolean => {
+    if (filter === 'DONE') return (po.status === 'ASSIGNED' || po.status === 'MANUALLY_OVERRIDDEN') && !po.sentToSmartMoov;
+    if (filter === 'NEEDS_ACTION') {
+      if (subFilter === 'RESOLVED') return po.status === 'RESOLVED_PENDING_RERUN';
+      if (subFilter === 'ALL' || subFilter === 'SUPPLIER') return false;
+      return matchExcCategory(po, subFilter);
+    }
+    return po.status === 'NOT_STARTED';
+  };
+
   const toggleSelectAll = () => {
-    const eligibleIds = filtered.filter(p => p.status === 'NOT_STARTED').map(p => p.id);
+    const eligibleIds = filtered.filter(isPoSelectable).map(p => p.id);
     if (selectedIds.size === eligibleIds.length && eligibleIds.length > 0) {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(eligibleIds));
     }
+  };
+
+  const handleSendToSmartMoov = () => {
+    if (selectedIds.size === 0) return;
+    const n = selectedIds.size;
+    setPos(prev => prev.map(p => selectedIds.has(p.id) ? { ...p, sentToSmartMoov: true } : p));
+    setSelectedIds(new Set());
+    showToast(`✅ ${n} LOT${n > 1 ? 's' : ''} sent to SmartMOOV`, 'success');
+  };
+
+  const [batchResolveOpen, setBatchResolveOpen] = useState(false);
+
+  const handleBatchResolve = (comment: string) => {
+    const n = selectedIds.size;
+    const ts = new Date().toISOString();
+    setPos(prev => prev.map(p =>
+      selectedIds.has(p.id) && p.status === 'EXCEPTION'
+        ? { ...p, status: 'RESOLVED_PENDING_RERUN', resolutionNotes: [...(p.resolutionNotes || []), { comment, resolvedAt: ts }] }
+        : p
+    ));
+    setSelectedIds(new Set());
+    setBatchResolveOpen(false);
+    showToast(`✅ ${n} LOT${n > 1 ? 's' : ''} resolved — ready to re-run`, 'success');
+  };
+
+  const handleBatchRerun = () => {
+    const targets = pos.filter(p => selectedIds.has(p.id) && p.status === 'RESOLVED_PENDING_RERUN');
+    if (targets.length === 0) return;
+
+    setBatchRunning(true);
+    showToast(t(lang, 'toast.batchStart', { n: targets.length }));
+
+    targets.forEach((po, idx) => {
+      setTimeout(() => {
+        const updated = computeAssignment(po);
+        setPos(prev => prev.map(p => p.id === po.id ? { ...updated, resolutionNotes: po.resolutionNotes } : p));
+
+        if (idx === targets.length - 1) {
+          setBatchRunning(false);
+          showToast(t(lang, 'toast.batchDone', { n: targets.length }), 'success');
+          setSelectedIds(new Set());
+        }
+      }, (idx + 1) * 400);
+    });
   };
 
   // Carrier Booking Logic
@@ -534,6 +649,7 @@ function App() {
       booked: bookingPos.filter(p => BOOKED_STATUSES.includes(p.status as POStatus)).length,
       overridden: bookingPos.filter(p => p.status === 'MANUALLY_OVERRIDDEN').length,
       exception: bookingPos.filter(p => p.status === 'EXCEPTION').length,
+      needs_action: bookingPos.filter(p => NEEDS_ACTION_STATUSES.includes(p.status)).length,
       exactMatch,
       withSnapshot: bookedTotal,
       accuracy: bookedTotal > 0 ? Math.round(exactMatch / bookedTotal * 100) : 0,
@@ -560,9 +676,28 @@ function App() {
     return usage;
   }, [pos, bookingPos]);
 
+  const bookingSubCounts = useMemo(() => {
+    const na = bookingPos.filter(p => NEEDS_ACTION_STATUSES.includes(p.status));
+    return {
+      ALL: na.length,
+      SCHEDULE: na.filter(p => matchExcCategory(p, 'SCHEDULE')).length,
+      NO_VESSEL: na.filter(p => matchExcCategory(p, 'NO_VESSEL')).length,
+      NO_SPACE: na.filter(p => matchExcCategory(p, 'NO_SPACE')).length,
+      SUPPLIER: na.filter(p => matchExcCategory(p, 'SUPPLIER')).length,
+    };
+  }, [bookingPos]);
+
+  const changeBookingFilter = (f: string, sub: string = 'ALL') => {
+    setBookingFilter(f);
+    setBookingSubFilter(sub);
+  };
+
   const bookingFiltered = useMemo(() => {
     let list = bookingPos;
-    if (bookingFilter === 'BOOKED') {
+    if (bookingFilter === 'NEEDS_ACTION') {
+      list = list.filter(p => NEEDS_ACTION_STATUSES.includes(p.status));
+      if (bookingSubFilter !== 'ALL') list = list.filter(p => matchExcCategory(p, bookingSubFilter));
+    } else if (bookingFilter === 'BOOKED' || bookingFilter === 'DONE') {
       list = list.filter(p => BOOKED_STATUSES.includes(p.status as POStatus));
     } else if (bookingFilter !== 'ALL') {
       list = list.filter(p => p.status === bookingFilter);
@@ -579,7 +714,7 @@ function App() {
       );
     }
     return list;
-  }, [bookingPos, bookingFilter, bookingSearchQuery]);
+  }, [bookingPos, bookingFilter, bookingSubFilter, bookingSearchQuery]);
 
   const openBookingDrawer = (po: PO) => {
     setBookingDrawerPo(po);
@@ -721,21 +856,30 @@ function App() {
               lang={lang}
               counts={counts}
               filter={filter}
-              setFilter={setFilter}
+              subFilter={subFilter}
+              setFilter={changeFilter}
             />
             <Toolbar
               lang={lang}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
               filter={filter}
-              setFilter={setFilter}
+              setFilter={changeFilter}
+              subFilter={subFilter}
+              setSubFilter={setSubFilter}
+              subCounts={subCounts}
               selectedIds={selectedIds}
               batchRunning={batchRunning}
               handleBatchRun={handleBatchRun}
+              handleSendToSmartMoov={handleSendToSmartMoov}
+              handleBatchResolve={() => setBatchResolveOpen(true)}
+              handleBatchRerun={handleBatchRerun}
             />
             <POTable
               lang={lang}
               filtered={filtered}
+              filter={filter}
+              isSelectable={isPoSelectable}
               selectedIds={selectedIds}
               toggleSelect={toggleSelect}
               toggleSelectAll={toggleSelectAll}
@@ -764,14 +908,18 @@ function App() {
               lang={lang}
               counts={bookingCounts}
               filter={bookingFilter}
-              setFilter={setBookingFilter}
+              subFilter={bookingSubFilter}
+              setFilter={changeBookingFilter}
             />
             <Toolbar
               lang={lang}
               searchQuery={bookingSearchQuery}
               setSearchQuery={setBookingSearchQuery}
               filter={bookingFilter}
-              setFilter={setBookingFilter}
+              setFilter={changeBookingFilter}
+              subFilter={bookingSubFilter}
+              setSubFilter={setBookingSubFilter}
+              subCounts={bookingSubCounts}
               selectedIds={bookingSelectedIds}
               batchRunning={bookingBatchRunning}
               handleBatchRun={handleBookingBatchRun}
@@ -876,6 +1024,13 @@ function App() {
             showToast(t(lang, 'toast.resolveSuccess', { po: resolvePo.moovRef || resolvePo.lot }), 'success');
           }
         }}
+        lang={lang}
+      />
+      <BatchResolveModal
+        open={batchResolveOpen}
+        count={selectedIds.size}
+        onClose={() => setBatchResolveOpen(false)}
+        onSubmit={handleBatchResolve}
         lang={lang}
       />
 

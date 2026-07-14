@@ -10,37 +10,39 @@ interface StatsGridProps {
     overridden: number;
     on_hold: number;
     exception: number;
+    needs_action: number;
+    done: number;
   };
   filter: string;
-  setFilter: (filter: string) => void;
+  subFilter: string;
+  setFilter: (filter: string, sub?: string) => void;
   isBooking?: boolean;
 }
 
 const STAT_DEFS = [
-  { tone: 'total', countKey: 'total', activeFilter: 'ALL' },
-  { tone: 'not_started', countKey: 'not_started', activeFilter: 'NOT_STARTED' },
-  { tone: 'assigned', countKey: 'assigned', activeFilter: 'ASSIGNED' },
-  { tone: 'on_hold', countKey: 'on_hold', activeFilter: 'ON_HOLD' },
-  { tone: 'exception', countKey: 'exception', activeFilter: 'EXCEPTION' },
-  // { tone: 'overridden', countKey: 'overridden', activeFilter: 'MANUALLY_OVERRIDDEN' },  // override hidden
+  { tone: 'total', countKey: 'total', labelKey: 'total', activeFilter: 'ALL', activeSub: 'ALL' },
+  { tone: 'not_started', countKey: 'not_started', labelKey: 'not_started', activeFilter: 'NOT_STARTED', activeSub: 'ALL' },
+  { tone: 'exception', countKey: 'needs_action', labelKey: 'needs_action', activeFilter: 'NEEDS_ACTION', activeSub: 'ALL' },
+  { tone: 'assigned', countKey: 'done', labelKey: 'done', activeFilter: 'DONE', activeSub: 'ALL' },
 ] as const;
 
-export function StatsGrid({ lang, counts, filter, setFilter, isBooking }: StatsGridProps) {
+export function StatsGrid({ lang, counts, filter, subFilter, setFilter, isBooking }: StatsGridProps) {
   return (
-    <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+    <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
       {STAT_DEFS.map(s => {
-        const trendKey = (isBooking ? 'bookingStats.trend.' : 'stats.trend.') + s.tone;
+        const trendKey = (isBooking ? 'bookingStats.trend.' : 'stats.trend.') + s.labelKey;
         const mainValue = counts[s.countKey as keyof typeof counts];
         const trendText = t(lang, trendKey);
+        const isActive = filter === s.activeFilter && subFilter === s.activeSub && filter !== 'ALL';
         return (
           <div
-            key={s.tone}
+            key={s.labelKey}
             data-tone={s.tone}
-            className={`stat-card ${filter === s.activeFilter && filter !== 'ALL' ? 'active' : ''}`}
-            onClick={() => setFilter(filter === s.activeFilter ? 'ALL' : s.activeFilter)}
+            className={`stat-card ${isActive ? 'active' : ''}`}
+            onClick={() => isActive ? setFilter('ALL') : setFilter(s.activeFilter, s.activeSub)}
           >
             <div className="stat-value">{mainValue}</div>
-            <div className="stat-label">{t(lang, (isBooking ? 'bookingStats.' : 'stats.') + s.tone)}</div>
+            <div className="stat-label">{t(lang, (isBooking ? 'bookingStats.' : 'stats.') + s.labelKey)}</div>
             <div className="stat-trend">{trendText}</div>
           </div>
         );

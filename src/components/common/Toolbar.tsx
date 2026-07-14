@@ -8,12 +8,20 @@ interface ToolbarProps {
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   filter: string;
-  setFilter: (f: string) => void;
+  setFilter: (f: string, sub?: string) => void;
+  subFilter: string;
+  setSubFilter: (s: string) => void;
+  subCounts: Record<string, number>;
   selectedIds: Set<number>;
   batchRunning: boolean;
   handleBatchRun: () => void;
+  handleSendToSmartMoov?: () => void;
+  handleBatchResolve?: () => void;
+  handleBatchRerun?: () => void;
   isBooking?: boolean;
 }
+
+const RESOLVABLE_REASONS = ['SCHEDULE', 'NO_VESSEL', 'NO_SPACE'];
 
 export function Toolbar({
   lang,
@@ -21,14 +29,20 @@ export function Toolbar({
   setSearchQuery,
   filter,
   setFilter,
+  subFilter,
+  setSubFilter,
+  subCounts,
   selectedIds,
   batchRunning,
   handleBatchRun,
+  handleSendToSmartMoov,
+  handleBatchResolve,
+  handleBatchRerun,
   isBooking
 }: ToolbarProps) {
-  const filters = isBooking
-    ? ['ALL', 'NOT_STARTED', 'BOOKED', /* 'MANUALLY_OVERRIDDEN', */ 'EXCEPTION']
-    : ['ALL', 'NOT_STARTED', 'ASSIGNED', /* 'MANUALLY_OVERRIDDEN', */ 'ON_HOLD', 'EXCEPTION'];
+  const subFilters = isBooking
+    ? ['ALL', 'NO_SPACE', 'SUPPLIER']
+    : ['ALL', 'SCHEDULE', 'NO_VESSEL', 'NO_SPACE', 'SUPPLIER', 'RESOLVED'];
 
   return (
     <div className="toolbar">
@@ -55,35 +69,75 @@ export function Toolbar({
             </button>
           )}
         </div>
-        <div className="toolbar-filter">
-          {filters.map(f => (
-            <button
-              key={f}
-              className={filter === f ? 'active' : ''}
-              onClick={() => setFilter(f)}
-            >
-              {t(lang, 'filter.' + f)}
-            </button>
-          ))}
-        </div>
+        {filter === 'NEEDS_ACTION' && (
+          <div className="subfilter-inline">
+            {subFilters.map(s => (
+              <button
+                key={s}
+                className={`subfilter-chip ${subFilter === s ? 'active' : ''}`}
+                onClick={() => setSubFilter(s)}
+              >
+                {t(lang, 'excFilter.' + s)}
+                <span className="subfilter-count">{subCounts[s] ?? 0}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {selectedIds.size > 0 && (
           <span className="selection-info">
             <b>{t(lang, 'selection', { n: selectedIds.size })}</b>
           </span>
         )}
       </div>
-      <button
-        className="btn btn-orange"
-        onClick={handleBatchRun}
-        disabled={batchRunning}
-      >
-        <IconPlay />
-        {batchRunning
-          ? t(lang, 'btn.running')
-          : selectedIds.size > 0
-            ? t(lang, 'btn.runSelected', { n: selectedIds.size })
-            : t(lang, 'btn.runAll')}
-      </button>
+      {filter === 'DONE' && !isBooking && handleSendToSmartMoov ? (
+        <button
+          className="btn btn-primary"
+          onClick={handleSendToSmartMoov}
+          disabled={selectedIds.size === 0}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
+          </svg>
+          {selectedIds.size > 0
+            ? t(lang, 'btn.sendToSmartMoovN', { n: selectedIds.size })
+            : t(lang, 'btn.sendToSmartMoov')}
+        </button>
+      ) : filter === 'NEEDS_ACTION' && !isBooking && subFilter === 'RESOLVED' && handleBatchRerun ? (
+        <button
+          className="btn btn-primary"
+          onClick={handleBatchRerun}
+          disabled={selectedIds.size === 0 || batchRunning}
+        >
+          <IconPlay />
+          {batchRunning
+            ? t(lang, 'btn.running')
+            : t(lang, 'btn.rerunSelected', { n: selectedIds.size })}
+        </button>
+      ) : filter === 'NEEDS_ACTION' && !isBooking && RESOLVABLE_REASONS.includes(subFilter) && handleBatchResolve ? (
+        <button
+          className="btn btn-primary"
+          onClick={handleBatchResolve}
+          disabled={selectedIds.size === 0}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          {t(lang, 'btn.resolveSelected', { n: selectedIds.size })}
+        </button>
+      ) : filter !== 'NEEDS_ACTION' && (
+        <button
+          className="btn btn-orange"
+          onClick={handleBatchRun}
+          disabled={batchRunning}
+        >
+          <IconPlay />
+          {batchRunning
+            ? t(lang, 'btn.running')
+            : selectedIds.size > 0
+              ? t(lang, 'btn.runSelected', { n: selectedIds.size })
+              : t(lang, 'btn.runAll')}
+        </button>
+      )}
     </div>
   );
 }

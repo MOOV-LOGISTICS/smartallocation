@@ -8,6 +8,7 @@ interface BookingCounts {
   booked: number;
   overridden: number;
   exception: number;
+  needs_action: number;
   accuracy: number;
 }
 
@@ -15,31 +16,34 @@ interface BookingStatsGridProps {
   lang: Lang;
   counts: BookingCounts;
   filter: string;
-  setFilter: (f: string) => void;
+  subFilter: string;
+  setFilter: (f: string, sub?: string) => void;
 }
 
-export function BookingStatsGrid({ lang, counts, filter, setFilter }: BookingStatsGridProps) {
+export function BookingStatsGrid({ lang, counts, filter, subFilter, setFilter }: BookingStatsGridProps) {
   const cards = [
-    { key: 'total',       filter: 'ALL',         value: counts.total,       tone: 'total' },
-    { key: 'not_started', filter: 'NOT_STARTED',  value: counts.not_started, tone: 'not_started' },
-    { key: 'booked',      filter: 'BOOKED',       value: counts.booked,      tone: 'assigned' },
-    { key: 'exception',   filter: 'EXCEPTION',    value: counts.exception,   tone: 'exception' },
+    { key: 'total',        filter: 'ALL',          sub: 'ALL', value: counts.total,        tone: 'total' },
+    { key: 'not_started',  filter: 'NOT_STARTED',  sub: 'ALL', value: counts.not_started,  tone: 'not_started' },
+    { key: 'needs_action', filter: 'NEEDS_ACTION', sub: 'ALL', value: counts.needs_action, tone: 'exception' },
+    { key: 'booked',       filter: 'DONE',         sub: 'ALL', value: counts.booked,       tone: 'assigned' },
   ];
 
   return (
     <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
-      {cards.map(c => (
+      {cards.map(c => {
+        const isActive = filter === c.filter && subFilter === c.sub && c.filter !== 'ALL';
+        return (
         <div
           key={c.key}
           data-tone={c.tone}
-          className={`stat-card ${filter === c.filter && c.filter !== 'ALL' ? 'active' : ''}`}
-          onClick={() => setFilter(filter === c.filter ? 'ALL' : c.filter)}
+          className={`stat-card ${isActive ? 'active' : ''}`}
+          onClick={() => isActive ? setFilter('ALL') : setFilter(c.filter, c.sub)}
         >
           <div className="stat-value">{c.value}</div>
           <div className="stat-label">{t(lang, 'bookingStats.' + c.key)}</div>
           <div className="stat-trend">{t(lang, 'bookingStats.trend.' + c.key)}</div>
         </div>
-      ))}
+      );})}
 
       {/* Overridden card hidden — override feature deferred
       <div data-tone="overridden" className={`stat-card ${filter === 'MANUALLY_OVERRIDDEN' ? 'active' : ''}`}

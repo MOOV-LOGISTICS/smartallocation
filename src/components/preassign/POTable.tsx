@@ -8,6 +8,8 @@ import { dateWithWeek, weekWithDate } from '../../utils/dateFormat';
 interface POTableProps {
   lang: Lang;
   filtered: PO[];
+  filter: string;
+  isSelectable: (po: PO) => boolean;
   selectedIds: Set<number>;
   toggleSelect: (id: number) => void;
   toggleSelectAll: () => void;
@@ -20,6 +22,8 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50];
 export function POTable({
   lang,
   filtered,
+  filter,
+  isSelectable,
   selectedIds,
   toggleSelect,
   toggleSelectAll,
@@ -36,7 +40,7 @@ export function POTable({
   const to = Math.min(currentPage * pageSize, filtered.length);
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  const eligibleIds = filtered.filter(p => p.status === 'NOT_STARTED').map(p => p.id);
+  const eligibleIds = filtered.filter(isSelectable).map(p => p.id);
   const allSelected = eligibleIds.length > 0 && selectedIds.size === eligibleIds.length;
 
   function pageButtons() {
@@ -91,7 +95,7 @@ export function POTable({
                   className={selectedIds.has(po.id) ? 'selected' : ''}
                 >
                   <td className="col-check">
-                    {po.status === 'NOT_STARTED' && (
+                    {isSelectable(po) && (
                       <span
                         className={`checkbox ${selectedIds.has(po.id) ? 'checked' : ''}`}
                         onClick={(e) => { e.stopPropagation(); toggleSelect(po.id); }}
@@ -142,6 +146,23 @@ export function POTable({
                   </td>
                   <td>
                     <StatusPill status={po.status} lang={lang} isBooking={false} />
+                    {po.sentToSmartMoov && (
+                      <div style={{ fontSize: 10, fontWeight: 600, color: '#065F46', marginTop: 3 }}>
+                        ✓ {t(lang, 'table.sentToSmartMoov')}
+                      </div>
+                    )}
+                    {po.status === 'RESOLVED_PENDING_RERUN' && po.resolutionNotes && po.resolutionNotes.length > 0 && (
+                      <div
+                        title={po.resolutionNotes[po.resolutionNotes.length - 1].comment}
+                        style={{
+                          fontSize: 10, fontWeight: 500, color: '#1D4ED8', marginTop: 3,
+                          maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap', cursor: 'help'
+                        }}
+                      >
+                        📝 {po.resolutionNotes[po.resolutionNotes.length - 1].comment}
+                      </div>
+                    )}
                   </td>
                   <td className="row-actions">
                     {po.status === 'NOT_STARTED' && (
@@ -160,7 +181,7 @@ export function POTable({
                         <IconAlert /> {t(lang, 'btn.review')}
                       </button>
                     )}
-                    {(po.status === 'ASSIGNED' || po.status === 'ON_HOLD') && (
+                    {(po.status === 'ASSIGNED' || po.status === 'ON_HOLD' || po.status === 'RESOLVED_PENDING_RERUN') && (
                       <button
                         className="row-trigger"
                         onClick={() => openDrawer(po)}
