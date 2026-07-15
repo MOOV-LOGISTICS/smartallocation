@@ -172,6 +172,7 @@ export function matchAttributeFilters(po: PO, f: AttributeFilters): boolean {
 }
 
 const SAVED_VIEWS_STORAGE_KEY = 'smartAllocation.savedViews.preassign';
+const BOOKING_SAVED_VIEWS_STORAGE_KEY = 'smartAllocation.savedViews.booking';
 
 export interface PreassignSnapshot {
   executedAt: string;
@@ -251,6 +252,47 @@ export function matchExcCategory(po: PO, cat: string): boolean {
 
 const NEEDS_ACTION_STATUSES = ['EXCEPTION', 'ON_HOLD', 'RESOLVED_PENDING_RERUN'];
 
+// Does the PO fall inside the current status tab (+ reason sub-filter)?
+// doneStatuses differs between pre-assign and carrier booking.
+function matchStatusScope(p: PO, filter: string, subFilter: string, doneStatuses: string[]): boolean {
+  if (filter === 'NEEDS_ACTION') {
+    if (!NEEDS_ACTION_STATUSES.includes(p.status)) return false;
+    if (subFilter !== 'ALL' && !matchExcCategory(p, subFilter)) return false;
+    return true;
+  }
+  if (filter === 'DONE' || filter === 'BOOKED') return doneStatuses.includes(p.status);
+  if (filter !== 'ALL') return p.status === filter;
+  return true;
+}
+
+// Per-option match counts for each facet, scoped to the current status tab and the
+// OTHER facets' selections (own facet excluded so multi-select stays additive).
+function buildFacetOptionCounts(
+  list: PO[],
+  filter: string,
+  subFilter: string,
+  doneStatuses: string[],
+  attrs: AttributeFilters
+) {
+  const statusScoped = list.filter(p => matchStatusScope(p, filter, subFilter, doneStatuses));
+  const countFor = (excludeKey: keyof AttributeFilters, getVal: (p: PO) => string | undefined) => {
+    const rest = { ...attrs, [excludeKey]: [] } as AttributeFilters;
+    const m: Record<string, number> = {};
+    statusScoped.filter(p => matchAttributeFilters(p, rest)).forEach(p => {
+      const v = getVal(p);
+      if (v) m[v] = (m[v] || 0) + 1;
+    });
+    return m;
+  };
+  return {
+    carriers: countFor('carriers', p => p.carrier),
+    pols: countFor('pols', p => p.pol),
+    pods: countFor('pods', p => p.pod),
+    vessels: countFor('vessels', p => p.vessel),
+    suppliers: countFor('suppliers', p => p.supplier),
+  };
+}
+
 function App() {
   const [lang, setLang] = useState<Lang>('en');
   const [activeTab, setActiveTab] = useState<'preassign' | 'allocation' | 'booking'>('preassign');
@@ -290,6 +332,14 @@ function App() {
   const [bookingSelectedIds, setBookingSelectedIds] = useState<Set<number>>(new Set());
   const [bookingFilter, setBookingFilter] = useState<string>('ALL');
   const [bookingSubFilter, setBookingSubFilter] = useState<string>('ALL');
+  const [bookingAttributeFilters, setBookingAttributeFilters] = useState<AttributeFilters>(EMPTY_ATTRIBUTE_FILTERS);
+  const [bookingSavedViews, setBookingSavedViews] = useState<SavedView[]>(() => {
+    try {
+      const raw = localStorage.getItem(BOOKING_SAVED_VIEWS_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  const [bookingActiveViewId, setBookingActiveViewId] = useState<string | null>(null);
   const [bookingSearchQuery, setBookingSearchQuery] = useState('');
   const [bookingDrawerPo, setBookingDrawerPo] = useState<PO | null>(null);
   const [bookingDrawerOpen, setBookingDrawerOpen] = useState(false);
@@ -323,8 +373,12 @@ function App() {
     done: pos.filter(p => p.status === 'ASSIGNED' || p.status === 'MANUALLY_OVERRIDDEN').length
   }), [pos]);
 
+  // Reason-chip counts respect the active attribute filters so chips and table stay in sync
   const subCounts = useMemo(() => {
-    const na = pos.filter(p => NEEDS_ACTION_STATUSES.includes(p.status));
+    const na = pos.filter(p =>
+      NEEDS_ACTION_STATUSES.includes(p.status) &&
+      (isAttributeFiltersEmpty(attributeFilters) || matchAttributeFilters(p, attributeFilters))
+    );
     return {
       ALL: na.length,
       SCHEDULE: na.filter(p => matchExcCategory(p, 'SCHEDULE')).length,
@@ -333,7 +387,12 @@ function App() {
       SUPPLIER: na.filter(p => matchExcCategory(p, 'SUPPLIER')).length,
       RESOLVED: na.filter(p => matchExcCategory(p, 'RESOLVED')).length,
     };
-  }, [pos]);
+  }, [pos, attributeFilters]);
+
+  const facetOptionCounts = useMemo(
+    () => buildFacetOptionCounts(pos, filter, subFilter, ['ASSIGNED', 'MANUALLY_OVERRIDDEN'], attributeFilters),
+    [pos, filter, subFilter, attributeFilters]
+  );
 
   const changeFilter = (f: string, sub: string = 'ALL') => {
     setFilter(f);
@@ -792,7 +851,10 @@ function App() {
   }, [pos, bookingPos]);
 
   const bookingSubCounts = useMemo(() => {
-    const na = bookingPos.filter(p => NEEDS_ACTION_STATUSES.includes(p.status));
+    const na = bookingPos.filter(p =>
+      NEEDS_ACTION_STATUSES.includes(p.status) &&
+      (isAttributeFiltersEmpty(bookingAttributeFilters) || matchAttributeFilters(p, bookingAttributeFilters))
+    );
     return {
       ALL: na.length,
       SCHEDULE: na.filter(p => matchExcCategory(p, 'SCHEDULE')).length,
@@ -800,12 +862,77 @@ function App() {
       NO_SPACE: na.filter(p => matchExcCategory(p, 'NO_SPACE')).length,
       SUPPLIER: na.filter(p => matchExcCategory(p, 'SUPPLIER')).length,
     };
-  }, [bookingPos]);
+  }, [bookingPos, bookingAttributeFilters]);
+
+  const bookingFacetOptionCounts = useMemo(
+    () => buildFacetOptionCounts(bookingPos, bookingFilter, bookingSubFilter, BOOKED_STATUSES, bookingAttributeFilters),
+    [bookingPos, bookingFilter, bookingSubFilter, bookingAttributeFilters]
+  );
 
   const changeBookingFilter = (f: string, sub: string = 'ALL') => {
     setBookingFilter(f);
     setBookingSubFilter(sub);
+    setBookingActiveViewId(null);
   };
+
+  const changeBookingSubFilter = (s: string) => {
+    setBookingSubFilter(s);
+    setBookingActiveViewId(null);
+  };
+
+  const updateBookingAttributeFilters = (f: AttributeFilters) => {
+    setBookingAttributeFilters(f);
+    setBookingActiveViewId(null);
+  };
+
+  const bookingFieldOptions = useMemo(() => ({
+    carriers: Array.from(new Set(bookingPos.map(p => p.carrier).filter(Boolean))).sort() as string[],
+    pols: Array.from(new Set(bookingPos.map(p => p.pol).filter(Boolean))).sort() as string[],
+    pods: Array.from(new Set(bookingPos.map(p => p.pod).filter(Boolean))).sort() as string[],
+    vessels: Array.from(new Set(bookingPos.map(p => p.vessel).filter(Boolean))).sort() as string[],
+    suppliers: Array.from(new Set(bookingPos.map(p => p.supplier).filter(Boolean))).sort() as string[],
+  }), [bookingPos]);
+
+  useEffect(() => {
+    try { localStorage.setItem(BOOKING_SAVED_VIEWS_STORAGE_KEY, JSON.stringify(bookingSavedViews)); } catch {}
+  }, [bookingSavedViews]);
+
+  const saveBookingViewAs = (name: string) => {
+    const view: SavedView = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      filter: bookingFilter,
+      subFilter: bookingSubFilter,
+      attributeFilters: bookingAttributeFilters,
+      createdAt: new Date().toISOString(),
+    };
+    setBookingSavedViews(prev => [...prev, view]);
+    setBookingActiveViewId(view.id);
+    showToast(t(lang, 'views.saved', { name }), 'success');
+  };
+
+  const applyBookingSavedView = (view: SavedView) => {
+    setBookingFilter(view.filter);
+    setBookingSubFilter(view.subFilter);
+    setBookingAttributeFilters(view.attributeFilters);
+    setBookingSelectedIds(new Set());
+    setBookingActiveViewId(view.id);
+  };
+
+  const deleteBookingSavedView = (id: string) => {
+    setBookingSavedViews(prev => prev.filter(v => v.id !== id));
+    if (bookingActiveViewId === id) resetToAllBookingView();
+  };
+
+  const resetToAllBookingView = () => {
+    setBookingFilter('ALL');
+    setBookingSubFilter('ALL');
+    setBookingAttributeFilters(EMPTY_ATTRIBUTE_FILTERS);
+    setBookingSelectedIds(new Set());
+    setBookingActiveViewId(null);
+  };
+
+  const isBookingPristine = bookingFilter === 'ALL' && bookingSubFilter === 'ALL' && isAttributeFiltersEmpty(bookingAttributeFilters);
 
   const bookingFiltered = useMemo(() => {
     let list = bookingPos;
@@ -816,6 +943,9 @@ function App() {
       list = list.filter(p => BOOKED_STATUSES.includes(p.status as POStatus));
     } else if (bookingFilter !== 'ALL') {
       list = list.filter(p => p.status === bookingFilter);
+    }
+    if (!isAttributeFiltersEmpty(bookingAttributeFilters)) {
+      list = list.filter(p => matchAttributeFilters(p, bookingAttributeFilters));
     }
     if (bookingSearchQuery) {
       const q = bookingSearchQuery.toLowerCase();
@@ -829,7 +959,7 @@ function App() {
       );
     }
     return list;
-  }, [bookingPos, bookingFilter, bookingSubFilter, bookingSearchQuery]);
+  }, [bookingPos, bookingFilter, bookingSubFilter, bookingAttributeFilters, bookingSearchQuery]);
 
   const openBookingDrawer = (po: PO) => {
     setBookingDrawerPo(po);
@@ -1003,6 +1133,7 @@ function App() {
               attributeFilters={attributeFilters}
               setAttributeFilters={updateAttributeFilters}
               fieldOptions={fieldOptions}
+              optionCounts={facetOptionCounts}
             />
             <POTable
               lang={lang}
@@ -1040,6 +1171,17 @@ function App() {
               subFilter={bookingSubFilter}
               setFilter={changeBookingFilter}
             />
+            <ViewTabs
+              lang={lang}
+              savedViews={bookingSavedViews}
+              activeViewId={bookingActiveViewId}
+              allActive={bookingActiveViewId === null && isBookingPristine}
+              canSave={!isBookingPristine}
+              onSelectAll={resetToAllBookingView}
+              onSelectView={applyBookingSavedView}
+              onDeleteView={deleteBookingSavedView}
+              onSaveView={saveBookingViewAs}
+            />
             <Toolbar
               lang={lang}
               searchQuery={bookingSearchQuery}
@@ -1047,11 +1189,15 @@ function App() {
               filter={bookingFilter}
               setFilter={changeBookingFilter}
               subFilter={bookingSubFilter}
-              setSubFilter={setBookingSubFilter}
+              setSubFilter={changeBookingSubFilter}
               subCounts={bookingSubCounts}
               selectedIds={bookingSelectedIds}
               batchRunning={bookingBatchRunning}
               handleBatchRun={handleBookingBatchRun}
+              attributeFilters={bookingAttributeFilters}
+              setAttributeFilters={updateBookingAttributeFilters}
+              fieldOptions={bookingFieldOptions}
+              optionCounts={bookingFacetOptionCounts}
               isBooking
             />
             <BookingTable

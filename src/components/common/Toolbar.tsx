@@ -30,6 +30,7 @@ interface ToolbarProps {
   attributeFilters?: AttributeFilters;
   setAttributeFilters?: (f: AttributeFilters) => void;
   fieldOptions?: FieldOptions;
+  optionCounts?: { [K in keyof FieldOptions]: Record<string, number> };
   isBooking?: boolean;
 }
 
@@ -53,6 +54,7 @@ export function Toolbar({
   attributeFilters,
   setAttributeFilters,
   fieldOptions,
+  optionCounts,
   isBooking
 }: ToolbarProps) {
   const subFilters = isBooking
@@ -62,6 +64,7 @@ export function Toolbar({
   const hasAttributeFilters = !!attributeFilters && !!setAttributeFilters && !!fieldOptions;
 
   return (
+    <>
     <div className="toolbar">
       <div className="toolbar-left">
         <div className="toolbar-search">
@@ -92,21 +95,8 @@ export function Toolbar({
             value={attributeFilters!}
             onChange={setAttributeFilters!}
             fieldOptions={fieldOptions!}
+            optionCounts={optionCounts}
           />
-        )}
-        {filter === 'NEEDS_ACTION' && (
-          <div className="subfilter-inline">
-            {subFilters.map(s => (
-              <button
-                key={s}
-                className={`subfilter-chip ${subFilter === s ? 'active' : ''}`}
-                onClick={() => setSubFilter(s)}
-              >
-                {t(lang, 'excFilter.' + s)}
-                <span className="subfilter-count">{subCounts[s] ?? 0}</span>
-              </button>
-            ))}
-          </div>
         )}
         {selectedIds.size > 0 && (
           <span className="selection-info">
@@ -164,5 +154,21 @@ export function Toolbar({
         </button>
       )}
     </div>
+    {filter === 'NEEDS_ACTION' && (
+      <div className="issue-type-bar">
+        <span className="subfilter-label">{t(lang, 'excFilter.label')}</span>
+        {subFilters.map(s => (
+          <button
+            key={s}
+            className={`subfilter-chip ${subFilter === s ? 'active' : ''}`}
+            onClick={() => setSubFilter(s)}
+          >
+            {t(lang, 'excFilter.' + s)}
+            <span className="subfilter-count">{subCounts[s] ?? 0}</span>
+          </button>
+        ))}
+      </div>
+    )}
+    </>
   );
 }
