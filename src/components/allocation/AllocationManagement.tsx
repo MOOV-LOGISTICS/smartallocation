@@ -1,10 +1,11 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, X, History } from 'lucide-react';
+import { Upload, Download, X, History } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Lang } from '../App';
 import { t } from '../i18n';
 import { VersionHistory } from './VersionHistory';
+import { BOOKING_MATRIX, FND_RULES, EARLY_SHIPMENT_LOTS } from '../../data/referenceData';
 
 interface BookingMatrixRecord {
   id: string;
@@ -256,6 +257,35 @@ export function AllocationManagement({
     }
   };
 
+  // Download the latest imported version; fall back to the built-in dataset the engine uses
+  const handleExport = () => {
+    let data: any[];
+    let name: string;
+    let versionTag: string;
+    if (activeTab === 'fnd') {
+      const latest = fndRulesVersions[fndRulesVersions.length - 1];
+      data = latest ? latest.data : FND_RULES;
+      versionTag = latest ? `v${latest.version}` : 'default';
+      name = 'FND_Rules';
+    } else if (activeTab === 'early') {
+      const latest = earlyShipmentVersions[earlyShipmentVersions.length - 1];
+      data = latest ? latest.data : Array.from(EARLY_SHIPMENT_LOTS).map(lot => ({ LOT: lot }));
+      versionTag = latest ? `v${latest.version}` : 'default';
+      name = 'Early_Shipment';
+    } else {
+      const latest = bookingMatrixVersions[bookingMatrixVersions.length - 1];
+      data = latest ? latest.data : BOOKING_MATRIX;
+      versionTag = latest ? `v${latest.version}` : 'default';
+      name = 'Booking_Matrix';
+    }
+    if (!data || data.length === 0) return;
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, name.replace(/_/g, ' ').slice(0, 31));
+    const dateTag = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `${name}_${versionTag}_${dateTag}.xlsx`);
+  };
+
   const filteredMatrixData = useMemo(() => {
     if (selectedLane === 'All') return currentMatrix;
     return currentMatrix.filter(row => {
@@ -302,6 +332,13 @@ export function AllocationManagement({
               Import
             </button>
             <button
+              onClick={handleExport}
+              className="btn flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+            <button
               onClick={() => setShowVersionHistory(true)}
               className="btn flex items-center gap-2"
             >
@@ -324,6 +361,13 @@ export function AllocationManagement({
             >
               <Upload className="w-4 h-4" />
               Import FND Rules
+            </button>
+            <button
+              onClick={handleExport}
+              className="btn flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Export
             </button>
             <button
               onClick={() => setShowVersionHistory(true)}
@@ -350,6 +394,13 @@ export function AllocationManagement({
               Import Early Shipment
             </button>
             <button
+              onClick={handleExport}
+              className="btn flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+            <button
               onClick={() => setShowVersionHistory(true)}
               className="btn flex items-center gap-2"
             >
@@ -368,46 +419,50 @@ export function AllocationManagement({
 
       {activeTab === 'matrix' && (
         <div className="table-wrap" style={{ maxHeight: 'calc(100vh - 280px)', overflow: 'auto' }}>
-          <div className="p-4 border-b flex gap-2" style={{ borderColor: 'var(--border)' }}>
-            <button
-              onClick={() => setSelectedLane('All')}
-              className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                selectedLane === 'All' ? 'btn-primary' : 'btn btn-sm'
-              }`}
-            >
-              All
-            </button>
-            {tradeLanes.map(lane => (
+          {currentMatrix.length > 0 && (
+            <div className="p-4 border-b flex gap-2" style={{ borderColor: 'var(--border)' }}>
               <button
-                key={lane}
-                onClick={() => setSelectedLane(lane)}
+                onClick={() => setSelectedLane('All')}
                 className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                  selectedLane === lane ? 'btn-primary' : 'btn btn-sm'
+                  selectedLane === 'All' ? 'btn-primary' : 'btn btn-sm'
                 }`}
               >
-                {lane}
+                All
               </button>
-            ))}
-          </div>
+              {tradeLanes.map(lane => (
+                <button
+                  key={lane}
+                  onClick={() => setSelectedLane(lane)}
+                  className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                    selectedLane === lane ? 'btn-primary' : 'btn btn-sm'
+                  }`}
+                >
+                  {lane}
+                </button>
+              ))}
+            </div>
+          )}
           <table>
-            <thead>
-              <tr>
-                <th>Origin Area</th>
-                <th>Origin Country</th>
-                <th>POL Code</th>
-                <th>POL</th>
-                <th>Destination Area</th>
-                <th>POD Code</th>
-                <th>POD</th>
-                <th>Carrier</th>
-                <th>Service</th>
-                <th>MoT</th>
-                <th>Ctr Type</th>
-                <th>Award</th>
-                <th>Assignment</th>
-                <th>Key Lane</th>
-              </tr>
-            </thead>
+            {currentMatrix.length > 0 && (
+              <thead>
+                <tr>
+                  <th>Origin Area</th>
+                  <th>Origin Country</th>
+                  <th>POL Code</th>
+                  <th>POL</th>
+                  <th>Destination Area</th>
+                  <th>POD Code</th>
+                  <th>POD</th>
+                  <th>Carrier</th>
+                  <th>Service</th>
+                  <th>MoT</th>
+                  <th>Ctr Type</th>
+                  <th>Award</th>
+                  <th>Assignment</th>
+                  <th>Key Lane</th>
+                </tr>
+              </thead>
+            )}
             <tbody>
               {filteredMatrixData.length === 0 ? (
                 <tr><td colSpan={14} className="empty">{currentMatrix.length === 0 ? 'No data imported' : 'No records match this trade lane'}</td></tr>
@@ -439,14 +494,16 @@ export function AllocationManagement({
       {activeTab === 'fnd' && (
         <div className="table-wrap" style={{ maxHeight: 'calc(100vh - 280px)', overflow: 'auto' }}>
           <table>
-            <thead>
-              <tr>
-                <th>CARRIER</th>
-                <th>DWH</th>
-                <th>POD</th>
-                <th>FND</th>
-              </tr>
-            </thead>
+            {currentFnd.length > 0 && (
+              <thead>
+                <tr>
+                  <th>CARRIER</th>
+                  <th>DWH</th>
+                  <th>POD</th>
+                  <th>FND</th>
+                </tr>
+              </thead>
+            )}
             <tbody>
               {currentFnd.length === 0 ? (
                 <tr><td colSpan={4} className="empty">No FND rules imported</td></tr>
@@ -748,13 +805,15 @@ export function AllocationManagement({
       {activeTab === 'early' && (
         <div className="table-wrap" style={{ maxHeight: 'calc(100vh - 280px)', overflow: 'auto' }}>
           <table>
-            <thead>
-              <tr>
-                {currentEarly.length > 0 && Object.keys(currentEarly[0]).map((key) => (
-                  <th key={key}>{key}</th>
-                ))}
-              </tr>
-            </thead>
+            {currentEarly.length > 0 && (
+              <thead>
+                <tr>
+                  {Object.keys(currentEarly[0]).map((key) => (
+                    <th key={key}>{key}</th>
+                  ))}
+                </tr>
+              </thead>
+            )}
             <tbody>
               {currentEarly.length === 0 ? (
                 <tr><td colSpan={10} className="empty">No early shipment lots imported</td></tr>

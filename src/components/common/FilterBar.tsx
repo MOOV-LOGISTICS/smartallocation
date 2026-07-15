@@ -16,6 +16,7 @@ interface FilterBarProps {
   value: AttributeFilters;
   onChange: (f: AttributeFilters) => void;
   fieldOptions: FieldOptions;
+  optionCounts?: { [K in keyof FieldOptions]: Record<string, number> };
 }
 
 const FACETS: { key: keyof FieldOptions; labelKey: string }[] = [
@@ -26,7 +27,7 @@ const FACETS: { key: keyof FieldOptions; labelKey: string }[] = [
   { key: 'suppliers', labelKey: 'filterPanel.supplier' },
 ];
 
-export function FilterBar({ lang, value, onChange, fieldOptions }: FilterBarProps) {
+export function FilterBar({ lang, value, onChange, fieldOptions, optionCounts }: FilterBarProps) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
@@ -72,6 +73,7 @@ export function FilterBar({ lang, value, onChange, fieldOptions }: FilterBarProp
             selected={value[f.key] || []}
             onToggleValue={(opt) => toggleValue(f.key, opt)}
             searchPlaceholder={t(lang, 'filterPanel.search')}
+            counts={optionCounts?.[f.key]}
           />
         );
       })}
@@ -127,6 +129,7 @@ interface FacetDropdownProps {
   selected: string[];
   onToggleValue: (option: string) => void;
   searchPlaceholder: string;
+  counts?: Record<string, number>;
 }
 
 function FacetDropdown({
@@ -138,6 +141,7 @@ function FacetDropdown({
   selected,
   onToggleValue,
   searchPlaceholder,
+  counts,
 }: FacetDropdownProps) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -174,16 +178,21 @@ function FacetDropdown({
           )}
           <div className="facet-options">
             {visible.length === 0 && <span className="facet-empty">—</span>}
-            {visible.map(opt => (
-              <label className="facet-option" key={opt}>
-                <input
-                  type="checkbox"
-                  checked={selected.includes(opt)}
-                  onChange={() => onToggleValue(opt)}
-                />
-                {opt}
-              </label>
-            ))}
+            {visible.map(opt => {
+              const n = counts ? (counts[opt] ?? 0) : undefined;
+              const isZero = n === 0 && !selected.includes(opt);
+              return (
+                <label className={`facet-option ${isZero ? 'zero' : ''}`} key={opt}>
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(opt)}
+                    onChange={() => onToggleValue(opt)}
+                  />
+                  <span className="facet-option-label">{opt}</span>
+                  {n !== undefined && <span className="facet-option-count">{n}</span>}
+                </label>
+              );
+            })}
           </div>
         </div>
       )}
