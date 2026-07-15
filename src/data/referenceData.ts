@@ -715,7 +715,7 @@ export const INITIAL_ALLOCATION: Record<string, number> = {
   'TSHG|MIDDLE EAST|NEU|22/26': 25,
   'TSHG|FAR EAST|NEU|22/26': 1662,
   'TSHG|BD|MED|22/26': 400,
-  'TSHG|FAR EAST|MED|22/26': 1663,
+  'TSHG|FAR EAST|MED|22/26': 15, // demo overcommit: Tailwind FAR EAST→MED usage 18 TEU vs 15 quota (~120%)
   'TSHG|BD|NEU|22/26': 400,
   'TSHG|MIDDLE EAST|MED|22/26': 25,
   'CMDU|FAR EAST|MED|23/26': 433,
@@ -749,7 +749,7 @@ export const INITIAL_ALLOCATION: Record<string, number> = {
   'TSHG|BD|MED|24/26': 400,
   'TSHG|FAR EAST|MED|24/26': 1375,
   'TSHG|FAR EAST|NEU|24/26': 1475,
-  'TSHG|BD|NEU|24/26': 400,
+  'TSHG|BD|NEU|24/26': 15, // demo overcommit: Tailwind BD→NEU usage 18 TEU vs 15 quota (~120%)
   'CMDU|FAR EAST|NEU|25/26': 645,
   'CMDU|FAR EAST|MED|25/26': 314,
   'CMDU|MIDDLE EAST|NEU|25/26': 39,
@@ -776,7 +776,7 @@ export const INITIAL_ALLOCATION: Record<string, number> = {
   'MSCU|MIDDLE EAST|NEU|26/26': 63,
   'MSCU|MIDDLE EAST|MED|26/26': 40,
   'MSCU|FAR EAST|MED|26/26': 146,
-  'TSHG|BD|MED|26/26': 400,
+  'TSHG|BD|MED|26/26': 15, // demo overcommit: Tailwind BD→MED usage 18 TEU (4 existing + 6 + 8) vs 15 quota (~120%)
   'TSHG|BD|NEU|26/26': 400,
   'TSHG|FAR EAST|MED|26/26': 1425,
   'TSHG|MIDDLE EAST|MED|26/26': 25,
