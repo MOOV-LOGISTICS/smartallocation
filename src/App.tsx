@@ -229,6 +229,7 @@ export interface PO {
   pendingAction?: string;
   sentToSmartMoov?: boolean;
   resolutionNotes?: ResolutionNote[];
+  kpFlag?: 'K' | 'P' | 'KP';
 }
 
 export interface Toast {
@@ -748,7 +749,8 @@ function App() {
   //   must narrow to a single reason first (On Hold batch flow deferred)
   // - everywhere else: select not-started LOTs (for batch run)
   const isPoSelectable = (po: PO): boolean => {
-    if (filter === 'DONE') return (po.status === 'ASSIGNED' || po.status === 'MANUALLY_OVERRIDDEN') && !po.sentToSmartMoov;
+    // Already-sent LOTs stay selectable — re-sending after changes is allowed
+    if (filter === 'DONE') return po.status === 'ASSIGNED' || po.status === 'MANUALLY_OVERRIDDEN';
     if (filter === 'NEEDS_ACTION') {
       if (subFilter === 'RESOLVED') return po.status === 'RESOLVED_PENDING_RERUN';
       if (subFilter === 'ALL' || subFilter === 'SUPPLIER') return false;

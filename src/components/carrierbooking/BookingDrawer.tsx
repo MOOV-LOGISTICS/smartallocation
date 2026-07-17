@@ -5,7 +5,7 @@ import { t } from '../../i18n';
 import { buildTraceLog } from '../../utils/traceBuilder';
 import { StatusPill } from '../common/StatusPill';
 import { BookingTraceStep } from './BookingTraceStep';
-import { OverridePanel } from '../preassign/OverridePanel';
+import { BOOKING_MATRIX, VESSEL_SCHEDULES } from '../../data/referenceData';
 import { IconClose, IconRefresh, IconSparkle, IconAlert, IconEdit } from '../icons/index';
 
 interface BookingDrawerProps {
@@ -24,12 +24,8 @@ interface BookingDrawerProps {
 
 export function BookingDrawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException, onOverride, allPos, onDisplace }: BookingDrawerProps) {
   const [activeTab, setActiveTab] = useState<'snapshot' | 'run'>('run');
-  const [showOverride, setShowOverride] = useState(false);
   const trace = useMemo(() => po ? buildTraceLog(po, lang) : [], [po, lang]);
   const isLive = isLiveRun && runningStep !== null;
-
-  // Reset override panel when switching to a different PO
-  useEffect(() => { setShowOverride(false); }, [po?.id]);
 
   const isBooked = po?.status === 'BOOKED_EXACT' || po?.status === 'BOOKED_UPDATED' || po?.status === 'ASSIGNED' || po?.status === 'MANUALLY_OVERRIDDEN';
   const progressPct = isLive
@@ -155,16 +151,10 @@ export function BookingDrawer({ po, open, onClose, runningStep, isLiveRun, onRer
                 </React.Fragment>
               ))}
 
-              {!isLive && po.status === 'BOOKED_EXACT' && <ResultCardBooked po={po} exact lang={lang} />}
-              {!isLive && po.status === 'BOOKED_UPDATED' && <ResultCardBooked po={po} exact={false} lang={lang} />}
-              {!isLive && po.status === 'ASSIGNED' && <ResultCardBooked po={po} exact={false} lang={lang} />}
-              {/* Override panel & MANUALLY_OVERRIDDEN card hidden — override feature deferred
-              {showOverride && onOverride && (
-                <OverridePanel po={po} lang={lang}
-                  onConfirm={(data) => { onOverride(data); setShowOverride(false); }}
-                  onCancel={() => setShowOverride(false)} />
-              )}
-              {!isLive && po.status === 'MANUALLY_OVERRIDDEN' && <ResultCardBookingOverridden po={po} />} */}
+              {!isLive && po.status === 'BOOKED_EXACT' && <ResultCardBooked po={po} exact lang={lang} onOverride={onOverride} />}
+              {!isLive && po.status === 'BOOKED_UPDATED' && <ResultCardBooked po={po} exact={false} lang={lang} onOverride={onOverride} />}
+              {!isLive && po.status === 'ASSIGNED' && <ResultCardBooked po={po} exact={false} lang={lang} onOverride={onOverride} />}
+              {!isLive && po.status === 'MANUALLY_OVERRIDDEN' && <ResultCardBookingOverridden po={po} />}
               {!isLive && po.status === 'ON_HOLD' && <ResultCardOnHold po={po} lang={lang} />}
               {!isLive && po.status === 'EXCEPTION' && <ResultCardException po={po} lang={lang} />}
             </>
@@ -189,19 +179,12 @@ export function BookingDrawer({ po, open, onClose, runningStep, isLiveRun, onRer
               Run Booking
             </button>
           )}
-          {/* Override & Re-run AI Booking buttons hidden — override feature deferred
-          {(po.status === 'BOOKED_EXACT' || po.status === 'BOOKED_UPDATED' || po.status === 'ASSIGNED') && !showOverride && onOverride && (
-            <button onClick={() => setShowOverride(true)}
-              className="px-3 py-1.5 text-xs font-medium border border-[#E9D5FF] text-[#6D28D9] rounded hover:bg-[#F5F3FF] transition-colors flex items-center gap-1">
-              <IconEdit /> Override
-            </button>
-          )}
           {po.status === 'MANUALLY_OVERRIDDEN' && (
-            <button onClick={() => { setShowOverride(false); onRerun(); }}
+            <button onClick={onRerun}
               className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors flex items-center gap-1">
               <IconRefresh /> Re-run AI Booking
             </button>
-          )} */}
+          )}
           {(po.status === 'BOOKED_EXACT' || po.status === 'BOOKED_UPDATED' || po.status === 'ASSIGNED') && (
             <button
               onClick={onRerun}
@@ -309,28 +292,164 @@ function ComparisonBar({ po, snap }: { po: PO; snap: NonNullable<PO['preassignSn
   );
 }
 
-function ResultCardBooked({ po, exact, lang }: { po: PO; exact: boolean; lang: Lang }) {
+function ResultCardBooked({ po, exact, lang, onOverride }: {
+  po: PO; exact: boolean; lang: Lang;
+  onOverride?: (data: { carrier: string; service: string; vessel: string; voyage: string; etd: string; eta: string }) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [carrier, setCarrier] = useState('');
+  const [service, setService] = useState('');
+  const [vessel, setVessel] = useState('');
+  const [voyage, setVoyage] = useState('');
+  const [etd, setEtd] = useState('');
+  const [eta, setEta] = useState('');
+
+  useEffect(() => { setEditing(false); }, [po.id]);
+
+  // Carriers serving this lane (Booking Matrix), and their scheduled voyages (Vessel Schedules)
+  const laneEntries = useMemo(
+    () => BOOKING_MATRIX.filter(e => e.polCode === po.pol && e.podCode === po.pod),
+    [po.pol, po.pod]
+  );
+  const carriers = useMemo(() => Array.from(new Set(laneEntries.map(e => e.carrier))), [laneEntries]);
+  const carrierCode = laneEntries.find(e => e.carrier === carrier)?.carrierCode;
+  const schedules = useMemo(
+    () => VESSEL_SCHEDULES.filter(v => v.carrierCode === carrierCode && v.polCode === po.pol && v.podCode === po.pod),
+    [carrierCode, po.pol, po.pod]
+  );
+  const vessels = useMemo(() => Array.from(new Set(schedules.map(s => s.vessel))), [schedules]);
+  const voyages = schedules.filter(s => s.vessel === vessel);
+
+  const startEdit = () => {
+    setCarrier(po.carrier || '');
+    setService(po.service || '');
+    setVessel(po.vessel || '');
+    setVoyage(po.voyage || '');
+    setEtd(po.etd || '');
+    setEta(po.eta || '');
+    setEditing(true);
+  };
+
+  const handleCarrierChange = (c: string) => {
+    setCarrier(c);
+    setService(laneEntries.find(e => e.carrier === c)?.service || '');
+    setVessel('');
+    setVoyage('');
+    setEtd('');
+    setEta('');
+  };
+
+  const handleVesselChange = (v: string) => {
+    setVessel(v);
+    setVoyage('');
+    setEtd('');
+    setEta('');
+  };
+
+  const handleVoyageChange = (vy: string) => {
+    setVoyage(vy);
+    const s = schedules.find(s => s.vessel === vessel && s.voyage === vy);
+    if (s) { setEtd(s.etd); setEta(s.eta); }
+  };
+
+  const isValid = !!(carrier && service && vessel && voyage && etd && eta);
+
+  const handleConfirm = () => {
+    if (!isValid || !onOverride) return;
+    onOverride({ carrier, service, vessel, voyage, etd, eta });
+    setEditing(false);
+  };
+
+  const selectCls = 'w-full px-2.5 py-1.5 border border-[#C5CFDB] rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#7C3AED] focus:border-transparent disabled:bg-[#F8FAFC] disabled:text-[#9EAFC0]';
+
   return (
     <motion.div
-      className={`border rounded-lg p-4 mt-5 ${exact ? 'bg-[#f0fdf4] border-[#bbf7d0]' : 'bg-[#eff6ff] border-[#bfdbfe]'}`}
+      className={`border rounded-lg p-4 mt-5 ${editing ? 'bg-[#F5F3FF] border-[#E9D5FF]' : exact ? 'bg-[#f0fdf4] border-[#bbf7d0]' : 'bg-[#eff6ff] border-[#bfdbfe]'}`}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
     >
       <div className="flex items-center gap-2 mb-3">
         <IconSparkle />
-        <h4 className="text-sm font-bold text-[#0F1E2E]">
-          {exact ? 'Booked · Exact Match' : 'Booked · Updated Voyage'}
+        <h4 className={`text-sm font-bold ${editing ? 'text-[#6D28D9]' : 'text-[#0F1E2E]'}`}>
+          {editing ? 'Manual Override' : exact ? 'Booked · Exact Match' : 'Booked · Updated Voyage'}
         </h4>
+        {!editing && onOverride && (
+          <button
+            onClick={startEdit}
+            className="ml-auto px-2.5 py-1 text-[11px] font-medium border border-[#E9D5FF] text-[#6D28D9] rounded-lg hover:bg-[#F5F3FF] transition-colors flex items-center gap-1"
+          >
+            <IconEdit /> Override
+          </button>
+        )}
+        {editing && (
+          <span className="ml-auto text-[10px] text-[#8A98AB]">logged as z.dorothy</span>
+        )}
       </div>
-      <div className="grid grid-cols-2 gap-2.5">
-        <ResultItem label="Carrier" value={po.carrier || ''} />
-        <ResultItem label="Service" value={po.service || ''} />
-        <div className="col-span-2">
-          <ResultItem label="Vessel / Voyage" value={`${po.vessel} · ${po.voyage}`} />
+
+      {!editing ? (
+        <div className="grid grid-cols-2 gap-2.5">
+          <ResultItem label="Carrier" value={po.carrier || ''} />
+          <ResultItem label="Service" value={po.service || ''} />
+          <ResultItem label="Vessel" value={po.vessel || ''} />
+          <ResultItem label="Voyage" value={po.voyage || ''} />
+          <ResultItem label="ETD" value={po.etd || ''} />
+          <ResultItem label="ETA" value={po.eta || ''} />
         </div>
-        <ResultItem label="ETD" value={po.etd || ''} />
-        <ResultItem label="ETA" value={po.eta || ''} />
-      </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 mb-4">
+            <div>
+              <label className="block text-[10px] font-semibold text-[#4A5A6E] uppercase tracking-wider mb-1">Carrier</label>
+              <select value={carrier} onChange={e => handleCarrierChange(e.target.value)} className={selectCls}>
+                {!carriers.includes(carrier) && carrier && <option value={carrier}>{carrier}</option>}
+                {carriers.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-[#4A5A6E] uppercase tracking-wider mb-1">Service</label>
+              <input type="text" value={service} readOnly className={selectCls} style={{ background: '#F8FAFC', color: '#4A5A6E' }} title="Service follows the carrier (Booking Matrix)" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-[#4A5A6E] uppercase tracking-wider mb-1">Vessel</label>
+              <select value={vessel} onChange={e => handleVesselChange(e.target.value)} className={selectCls} disabled={vessels.length === 0}>
+                <option value="">{vessels.length > 0 ? 'Select vessel…' : 'No scheduled vessels for this carrier'}</option>
+                {!vessels.includes(vessel) && vessel && <option value={vessel}>{vessel}</option>}
+                {vessels.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-[#4A5A6E] uppercase tracking-wider mb-1">Voyage</label>
+              <select value={voyage} onChange={e => handleVoyageChange(e.target.value)} className={selectCls} disabled={!vessel}>
+                <option value="">{vessel ? 'Select voyage…' : 'Select vessel first'}</option>
+                {vessel && !voyages.some(s => s.voyage === voyage) && voyage && <option value={voyage}>{voyage}</option>}
+                {voyages.map(s => (
+                  <option key={s.voyage} value={s.voyage}>
+                    {s.voyage} — ETD {s.etd} · ETA {s.eta} · {s.availableTeu} TEU
+                  </option>
+                ))}
+              </select>
+            </div>
+            <ResultItem label="ETD" value={etd || '—'} />
+            <ResultItem label="ETA" value={eta || '—'} />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setEditing(false)}
+              className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded-lg hover:bg-white text-[#4A5A6E] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirm}
+              disabled={!isValid}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg text-white transition-colors"
+              style={{ background: isValid ? '#7C3AED' : '#C5CFDB', cursor: isValid ? 'pointer' : 'not-allowed' }}
+            >
+              Confirm Override
+            </button>
+          </div>
+        </>
+      )}
     </motion.div>
   );
 }
@@ -425,22 +544,26 @@ function SlotDisplacementAgent({
   const [selectedId, setSelectedId] = React.useState<number | null>(null);
   const [confirming, setConfirming] = React.useState(false);
 
+  // Only pre-assigned LOTs are displaceable — carrier-booked LOTs are never offered
+  // (cancelling a confirmed booking is out of scope for slot displacement).
   const isEligible = (p: PO) =>
     p.id !== po.id &&
     p.pol === po.pol &&
     p.pod === po.pod &&
-    ['ASSIGNED', 'BOOKED_EXACT', 'BOOKED_UPDATED'].includes(p.status) &&
+    p.status === 'ASSIGNED' &&
     !!p.ldd && !!p.crd &&
     crdBufferDays(p.crd, p.ldd) >= 20;
 
-  const candidates = useMemo(() => allPos.filter(isEligible), [allPos, po]);
-  const preassignList = candidates.filter(p => p.status === 'ASSIGNED').slice(0, 3);
-  const bookedList = candidates.filter(p => p.status === 'BOOKED_EXACT' || p.status === 'BOOKED_UPDATED').slice(0, 3);
+  // Longest buffer first — the safest LOT to displace tops the list
+  const candidates = useMemo(
+    () => allPos.filter(isEligible).sort((a, b) => crdBufferDays(b.crd, b.ldd) - crdBufferDays(a.crd, a.ldd)),
+    [allPos, po]
+  );
+  const preassignList = candidates.slice(0, 4);
 
-  if (preassignList.length === 0 && bookedList.length === 0) return null;
+  if (preassignList.length === 0) return null;
 
   const selectedPo = candidates.find(p => p.id === selectedId);
-  const isPreassign = selectedPo?.status === 'ASSIGNED';
 
   const handleConfirm = () => {
     if (!selectedPo) return;
@@ -469,16 +592,14 @@ function SlotDisplacementAgent({
             <div>
               <p className="text-sm font-semibold text-[#0F1E2E] mb-1">Confirm Override</p>
               <p className="text-xs text-[#4A5A6E] mb-4 leading-relaxed">
-                {isPreassign
-                  ? <><span className="font-mono font-semibold">{selectedPo.moovRef}</span> ({selectedPo.lot}) is <span className="text-[#D97706] font-semibold">pre-assigned only</span> — displacing will release its vessel slot with no carrier impact.</>
-                  : <><span className="text-[#DC2626] font-semibold">⚠️ {selectedPo.moovRef}</span> ({selectedPo.lot}) is <span className="font-semibold">carrier-booked</span>. Displacing requires cancellation of the existing booking. Proceed with caution.</>}
+                <span className="font-mono font-semibold">{selectedPo.moovRef}</span> ({selectedPo.lot}) is <span className="text-[#D97706] font-semibold">pre-assigned only</span> — displacing will release its vessel slot with no carrier impact.
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={handleConfirm}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg text-white transition-colors ${isPreassign ? 'bg-[#004F7C] hover:bg-[#337296]' : 'bg-[#DC2626] hover:bg-[#B91C1C]'}`}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg text-white transition-colors bg-[#004F7C] hover:bg-[#337296]"
                 >
-                  {isPreassign ? 'Confirm' : '⚠️ Confirm & Cancel Booking'}
+                  Confirm
                 </button>
                 <button
                   onClick={() => setConfirming(false)}
@@ -510,20 +631,6 @@ function SlotDisplacementAgent({
                 </div>
               )}
 
-              {bookedList.length > 0 && (
-                <div className="mb-3">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span className="w-2 h-2 rounded-full bg-[#EF4444] flex-shrink-0" />
-                    <span className="text-[10px] font-bold text-[#991B1B] uppercase tracking-wider">Carrier Booked · Cancellation required</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {bookedList.map(p => (
-                      <DisplacementCard key={p.id} p={p} selected={selectedId === p.id} onSelect={() => setSelectedId(selectedId === p.id ? null : p.id)} tier="booked" />
-                    ))}
-                  </div>
-                </div>
-              )}
-
               <button
                 disabled={!selectedId}
                 onClick={() => setConfirming(true)}
@@ -543,7 +650,8 @@ function DisplacementCard({ p, selected, onSelect, tier }: {
   p: PO; selected: boolean; onSelect: () => void; tier: 'preassign' | 'booked';
 }) {
   const buffer = p.ldd && p.crd ? crdBufferDays(p.crd, p.ldd) : 0;
-  const supplier = p.supplier?.split('/')[0]?.trim() || '—';
+  const hasK = p.kpFlag === 'K' || p.kpFlag === 'KP';
+  const hasP = p.kpFlag === 'P' || p.kpFlag === 'KP';
   return (
     <div
       onClick={onSelect}
@@ -560,25 +668,35 @@ function DisplacementCard({ p, selected, onSelect, tier }: {
           <span className="font-semibold font-mono text-[#0F1E2E]">{p.moovRef}</span>
           <span className="text-[#8A98AB] ml-1.5 text-[11px]">{p.lot}</span>
         </div>
-        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${
-          tier === 'preassign' ? 'bg-[#FEF3C7] text-[#92400E]' : 'bg-[#FEE2E2] text-[#991B1B]'
-        }`}>
-          {tier === 'preassign' ? '🟡 Pre-assigned' : '🔴 Carrier Booked'}
-        </span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {hasK && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#E0E7FF] text-[#3730A3]" title="Kaufland LOT">K</span>
+          )}
+          {hasP && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#FCE7F3] text-[#9D174D]" title="PEPCO LOT">P</span>
+          )}
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+            tier === 'preassign' ? 'bg-[#FEF3C7] text-[#92400E]' : 'bg-[#FEE2E2] text-[#991B1B]'
+          }`}>
+            {tier === 'preassign' ? '🟡 Pre-assigned' : '🔴 Carrier Booked'}
+          </span>
+        </div>
       </div>
-      <div className="grid grid-cols-3 gap-x-3 text-[11px] text-[#4A5A6E] mb-1">
-        <div><span className="text-[#8A98AB]">Supplier: </span>{supplier}</div>
+      <div className="grid grid-cols-3 gap-x-3 gap-y-0.5 text-[11px] text-[#4A5A6E] mb-1">
         <div><span className="text-[#8A98AB]">CRD: </span><span className="font-mono">{p.crdWeek}</span></div>
+        <div><span className="text-[#8A98AB]">FOB: </span><span className="font-mono">{p.fobWeek}</span></div>
         <div>
           <span className="text-[#8A98AB]">Buffer: </span>
           <span className={`font-semibold ${buffer >= 50 ? 'text-[#047857]' : 'text-[#D97706]'}`}>{buffer}d</span>
         </div>
+        <div><span className="text-[#8A98AB]">ETD: </span><span className="font-mono">{p.etd || '—'}</span></div>
+        <div><span className="text-[#8A98AB]">ETA: </span><span className="font-mono">{p.eta || '—'}</span></div>
+        <div><span className="text-[#8A98AB]">LDD: </span><span className="font-mono">{p.ldd || '—'}</span></div>
       </div>
       {(p.vessel || p.carrier) && (
         <div className="text-[11px] text-[#4A5A6E]">
           <span className="text-[#8A98AB]">Vessel: </span>
           <span className="font-mono">{p.vessel} / {p.voyage}</span>
-          {p.etd && <><span className="text-[#8A98AB] ml-2">ETD </span><span className="font-mono">{p.etd}</span></>}
         </div>
       )}
     </div>
