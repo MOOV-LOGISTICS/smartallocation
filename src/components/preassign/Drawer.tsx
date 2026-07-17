@@ -6,8 +6,8 @@ import { buildTraceLog, TraceEntry } from '../../utils/traceBuilder';
 import { StatusPill } from '../common/StatusPill';
 import { TraceStep } from './TraceStep';
 import { AgentPrompt, StaticAgentAction } from './AgentPrompt';
-import { OverridePanel } from './OverridePanel';
 import { DisplacementPanel } from './DisplacementPanel';
+import { BOOKING_MATRIX, VESSEL_SCHEDULES } from '../../data/referenceData';
 import { IconClose, IconRefresh, IconSparkle, IconAlert, IconEdit } from '../icons/index';
 
 interface AgentIntercept {
@@ -42,12 +42,11 @@ interface DrawerProps {
 export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lang, onGoToException, allocationUsage, initialAllocation, agentIntercept, onOverride, allPOs = [], onEmailSent, onDisplace, onRerunWithNewCrd }: DrawerProps) {
   const trace = useMemo(() => po ? buildTraceLog(po, lang, allocationUsage, initialAllocation) : [], [po, lang, allocationUsage, initialAllocation]);
   const isLive = isLiveRun && runningStep !== null;
-  const [showOverride, setShowOverride] = useState(false);
   const [showDisplacement, setShowDisplacement] = useState(false);
   const progressPct = isLive
     ? Math.min(100, (runningStep - 1) / 5 * 100)
     : po
-      ? (po.status === 'ASSIGNED' ? 100 : po.status === 'ON_HOLD' ? (1 / 5 * 100) : ((Math.min(po.exceptionAtStep || 1, 4) - 1) / 5 * 100))
+      ? (po.status === 'ASSIGNED' || po.status === 'MANUALLY_OVERRIDDEN' ? 100 : po.status === 'ON_HOLD' ? (1 / 5 * 100) : ((Math.min(po.exceptionAtStep || 1, 4) - 1) / 5 * 100))
       : 0;
 
   // Candidates for slot displacement: same lane, ASSIGNED, later CRD week than current PO
@@ -159,17 +158,11 @@ export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lan
           )}
 
           {!isLive && !agentIntercept && po.status === 'ASSIGNED' && (
-            <ResultCardAssigned po={po} lang={lang} />
-          )}
-          {/* Override panel hidden — feature deferred
-          {!isLive && !agentIntercept && po.status === 'ASSIGNED' && showOverride && onOverride && (
-            <OverridePanel po={po} lang={lang}
-              onConfirm={(data) => { onOverride(data); setShowOverride(false); }}
-              onCancel={() => setShowOverride(false)} />
+            <ResultCardAssigned po={po} lang={lang} onOverride={onOverride} />
           )}
           {!isLive && !agentIntercept && po.status === 'MANUALLY_OVERRIDDEN' && (
             <ResultCardOverridden po={po} lang={lang} />
-          )} */}
+          )}
           {!isLive && !agentIntercept && po.status === 'ON_HOLD' && (
             <ResultCardOnHold po={po} lang={lang} pendingAction={po.pendingAction} />
           )}
@@ -234,19 +227,12 @@ export function Drawer({ po, open, onClose, runningStep, isLiveRun, onRerun, lan
               <IconRefresh /> {t(lang, 'btn.rerun')}
             </button>
           )}
-          {/* Override & Re-run AI buttons hidden — override feature deferred
-          {po.status === 'ASSIGNED' && !showOverride && onOverride && (
-            <button onClick={() => setShowOverride(true)}
-              className="px-3 py-1.5 text-xs font-medium border border-[#E9D5FF] text-[#6D28D9] rounded hover:bg-[#F5F3FF] transition-colors flex items-center gap-1">
-              <IconEdit /> Override
-            </button>
-          )}
           {po.status === 'MANUALLY_OVERRIDDEN' && (
             <button onClick={onRerun}
               className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors flex items-center gap-1">
               <IconRefresh /> Re-run AI
             </button>
-          )} */}
+          )}
           <button onClick={onClose} className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded hover:bg-[#F8FAFC] transition-colors">
             {t(lang, 'btn.close')}
           </button>
@@ -266,26 +252,163 @@ function MetaItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ResultCardAssigned({ po, lang }: { po: PO; lang: Lang }) {
+function ResultCardAssigned({ po, lang, onOverride }: {
+  po: PO; lang: Lang;
+  onOverride?: (data: { carrier: string; service: string; vessel: string; voyage: string; etd: string; eta: string }) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [carrier, setCarrier] = useState('');
+  const [service, setService] = useState('');
+  const [vessel, setVessel] = useState('');
+  const [voyage, setVoyage] = useState('');
+  const [etd, setEtd] = useState('');
+  const [eta, setEta] = useState('');
+
+  React.useEffect(() => { setEditing(false); }, [po.id]);
+
+  const laneEntries = useMemo(
+    () => BOOKING_MATRIX.filter(e => e.polCode === po.pol && e.podCode === po.pod),
+    [po.pol, po.pod]
+  );
+  const carriers = useMemo(() => Array.from(new Set(laneEntries.map(e => e.carrier))), [laneEntries]);
+  const carrierCode = laneEntries.find(e => e.carrier === carrier)?.carrierCode;
+  const schedules = useMemo(
+    () => VESSEL_SCHEDULES.filter(v => v.carrierCode === carrierCode && v.polCode === po.pol && v.podCode === po.pod),
+    [carrierCode, po.pol, po.pod]
+  );
+  const vessels = useMemo(() => Array.from(new Set(schedules.map(s => s.vessel))), [schedules]);
+  const voyages = schedules.filter(s => s.vessel === vessel);
+
+  const startEdit = () => {
+    setCarrier(po.carrier || '');
+    setService(po.service || '');
+    setVessel(po.vessel || '');
+    setVoyage(po.voyage || '');
+    setEtd(po.etd || '');
+    setEta(po.eta || '');
+    setEditing(true);
+  };
+
+  const handleCarrierChange = (c: string) => {
+    setCarrier(c);
+    setService(laneEntries.find(e => e.carrier === c)?.service || '');
+    setVessel('');
+    setVoyage('');
+    setEtd('');
+    setEta('');
+  };
+
+  const handleVesselChange = (v: string) => {
+    setVessel(v);
+    setVoyage('');
+    setEtd('');
+    setEta('');
+  };
+
+  const handleVoyageChange = (vy: string) => {
+    setVoyage(vy);
+    const s = schedules.find(s => s.vessel === vessel && s.voyage === vy);
+    if (s) { setEtd(s.etd); setEta(s.eta); }
+  };
+
+  const isValid = !!(carrier && service && vessel && voyage && etd && eta);
+
+  const handleConfirm = () => {
+    if (!isValid || !onOverride) return;
+    onOverride({ carrier, service, vessel, voyage, etd, eta });
+    setEditing(false);
+  };
+
+  const selectCls = 'w-full px-2.5 py-1.5 border border-[#C5CFDB] rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#7C3AED] focus:border-transparent disabled:bg-[#F8FAFC] disabled:text-[#9EAFC0]';
+
   return (
-    <motion.div 
-      className="bg-[#f0fdf4] border border-[#bbf7d0] rounded-lg p-4 mt-5"
+    <motion.div
+      className={`border rounded-lg p-4 mt-5 ${editing ? 'bg-[#F5F3FF] border-[#E9D5FF]' : 'bg-[#f0fdf4] border-[#bbf7d0]'}`}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
     >
       <div className="flex items-center gap-2 mb-3">
         <IconSparkle />
-        <h4 className="text-sm font-bold text-[#0F1E2E]">{t(lang, 'result.assignedTitle')}</h4>
+        <h4 className={`text-sm font-bold ${editing ? 'text-[#6D28D9]' : 'text-[#0F1E2E]'}`}>
+          {editing ? 'Manual Override' : t(lang, 'result.assignedTitle')}
+        </h4>
+        {!editing && onOverride && (
+          <button
+            onClick={startEdit}
+            className="ml-auto px-2.5 py-1 text-[11px] font-medium border border-[#E9D5FF] text-[#6D28D9] rounded-lg hover:bg-[#F5F3FF] transition-colors flex items-center gap-1"
+          >
+            <IconEdit /> Override
+          </button>
+        )}
+        {editing && (
+          <span className="ml-auto text-[10px] text-[#8A98AB]">logged as z.dorothy</span>
+        )}
       </div>
-      <div className="grid grid-cols-2 gap-2.5">
-        <ResultItem label={t(lang, 'result.carrier')} value={po.carrier || ''} />
-        <ResultItem label={t(lang, 'result.service')} value={po.service || ''} />
-        <div className="col-span-2">
-          <ResultItem label={t(lang, 'result.vesselVoyage')} value={`${po.vessel} · ${po.voyage}`} />
+
+      {!editing ? (
+        <div className="grid grid-cols-2 gap-2.5">
+          <ResultItem label={t(lang, 'result.carrier')} value={po.carrier || ''} />
+          <ResultItem label={t(lang, 'result.service')} value={po.service || ''} />
+          <ResultItem label="Vessel" value={po.vessel || ''} />
+          <ResultItem label="Voyage" value={po.voyage || ''} />
+          <ResultItem label={t(lang, 'result.etd')} value={po.etd || ''} />
+          <ResultItem label={t(lang, 'result.eta')} value={po.eta || ''} />
         </div>
-        <ResultItem label={t(lang, 'result.etd')} value={po.etd || ''} />
-        <ResultItem label={t(lang, 'result.eta')} value={po.eta || ''} />
-      </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 mb-4">
+            <div>
+              <label className="block text-[10px] font-semibold text-[#4A5A6E] uppercase tracking-wider mb-1">Carrier</label>
+              <select value={carrier} onChange={e => handleCarrierChange(e.target.value)} className={selectCls}>
+                {!carriers.includes(carrier) && carrier && <option value={carrier}>{carrier}</option>}
+                {carriers.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-[#4A5A6E] uppercase tracking-wider mb-1">Service</label>
+              <input type="text" value={service} readOnly className={selectCls} style={{ background: '#F8FAFC', color: '#4A5A6E' }} title="Service follows the carrier (Booking Matrix)" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-[#4A5A6E] uppercase tracking-wider mb-1">Vessel</label>
+              <select value={vessel} onChange={e => handleVesselChange(e.target.value)} className={selectCls} disabled={vessels.length === 0}>
+                <option value="">{vessels.length > 0 ? 'Select vessel…' : 'No scheduled vessels for this carrier'}</option>
+                {!vessels.includes(vessel) && vessel && <option value={vessel}>{vessel}</option>}
+                {vessels.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-[#4A5A6E] uppercase tracking-wider mb-1">Voyage</label>
+              <select value={voyage} onChange={e => handleVoyageChange(e.target.value)} className={selectCls} disabled={!vessel}>
+                <option value="">{vessel ? 'Select voyage…' : 'Select vessel first'}</option>
+                {vessel && !voyages.some(s => s.voyage === voyage) && voyage && <option value={voyage}>{voyage}</option>}
+                {voyages.map(s => (
+                  <option key={s.voyage} value={s.voyage}>
+                    {s.voyage} — ETD {s.etd} · ETA {s.eta} · {s.availableTeu} TEU
+                  </option>
+                ))}
+              </select>
+            </div>
+            <ResultItem label={t(lang, 'result.etd')} value={etd || '—'} />
+            <ResultItem label={t(lang, 'result.eta')} value={eta || '—'} />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setEditing(false)}
+              className="px-3 py-1.5 text-xs font-medium border border-[#C5CFDB] rounded-lg hover:bg-white text-[#4A5A6E] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirm}
+              disabled={!isValid}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg text-white transition-colors"
+              style={{ background: isValid ? '#7C3AED' : '#C5CFDB', cursor: isValid ? 'pointer' : 'not-allowed' }}
+            >
+              Confirm Override
+            </button>
+          </div>
+        </>
+      )}
     </motion.div>
   );
 }
