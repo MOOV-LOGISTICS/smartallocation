@@ -16,6 +16,7 @@ import { AllocationManagement } from './components/allocation/AllocationManageme
 import { ExceptionDashboard } from './components/exception/ExceptionDashboard';
 import { ResolveModal } from './components/exception/ResolveModal';
 import { BatchResolveModal } from './components/exception/BatchResolveModal';
+import { RescheduleModal, RescheduleTarget } from './components/preassign/RescheduleModal';
 import { MOCK_POS, BOOKING_MOCK_POS, DEMO_ALLOCATION_USAGE } from './data/mockData';
 import { INITIAL_ALLOCATION, EARLY_SHIPMENT_LOTS, BOOKING_MATRIX, VESSEL_SCHEDULES, FND_RULES } from './data/referenceData';
 import { I18N, t } from './i18n';
@@ -29,7 +30,7 @@ const CARRIER_TO_CODE: Record<string, string> = {
   'COSCO': 'COSU',
 };
 
-function etdToAllocWeek(etd: string): string {
+export function etdToAllocWeek(etd: string): string {
   const d = new Date(Date.UTC(
     parseInt(etd.slice(0, 4)),
     parseInt(etd.slice(5, 7)) - 1,
@@ -773,7 +774,43 @@ function App() {
     showToast(`✅ ${n} LOT${n > 1 ? 's' : ''} sent to SmartMOOV`, 'success');
   };
 
+  // Batch reschedule: move selected assigned LOTs onto a new carrier/voyage.
+  // Original assignment is preserved in preassignSnapshot; status becomes
+  // MANUALLY_OVERRIDDEN so rescheduled LOTs stay auditable and distinct from AI picks.
+  const handleBatchReschedule = (lotIds: number[], target: RescheduleTarget) => {
+    const ids = new Set(lotIds);
+    const ts = new Date().toISOString();
+    setPos(prev => prev.map(p => {
+      if (!ids.has(p.id)) return p;
+      return {
+        ...p,
+        preassignSnapshot: p.carrier ? {
+          executedAt: p.overriddenAt || ts,
+          carrier: p.carrier,
+          service: p.service || '',
+          vessel: p.vessel || '',
+          voyage: p.voyage || '',
+          etd: p.etd || '',
+          eta: p.eta || '',
+        } : p.preassignSnapshot,
+        carrier: target.carrier,
+        service: target.service,
+        vessel: target.vessel,
+        voyage: target.voyage,
+        etd: target.etd,
+        eta: target.eta,
+        peta: target.peta,
+        status: 'MANUALLY_OVERRIDDEN',
+        overriddenBy: 'z.dorothy',
+        overriddenAt: ts,
+      };
+    }));
+    setSelectedIds(new Set());
+    showToast(t(lang, 'reschedule.toast', { n: lotIds.length, carrier: target.carrier, vessel: target.vessel }), 'success');
+  };
+
   const [batchResolveOpen, setBatchResolveOpen] = useState(false);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
 
   const handleBatchResolve = (comment: string) => {
     const n = selectedIds.size;
@@ -1128,6 +1165,7 @@ function App() {
               batchRunning={batchRunning}
               handleBatchRun={handleBatchRun}
               handleSendToSmartMoov={handleSendToSmartMoov}
+              handleReschedule={() => setRescheduleOpen(true)}
               handleBatchResolve={() => setBatchResolveOpen(true)}
               handleBatchRerun={handleBatchRerun}
               attributeFilters={attributeFilters}
@@ -1307,6 +1345,14 @@ function App() {
         onClose={() => setBatchResolveOpen(false)}
         onSubmit={handleBatchResolve}
         lang={lang}
+      />
+      <RescheduleModal
+        open={rescheduleOpen}
+        lots={pos.filter(p => selectedIds.has(p.id))}
+        lang={lang}
+        allocationUsage={allocationUsage}
+        onClose={() => setRescheduleOpen(false)}
+        onConfirm={handleBatchReschedule}
       />
 
       {/* Carrier Booking Modals */}
